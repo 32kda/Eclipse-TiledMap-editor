@@ -16,7 +16,7 @@ public class MapperPlugin extends AbstractUIPlugin {
 	private static MapperPlugin plugin;
 	
 	/**
-	 * The constructor
+	 * The constructor stuff
 	 */
 	public MapperPlugin() {
 	}
