@@ -2,19 +2,28 @@ package com.onpositive.mapper.editors;
 
 import java.awt.geom.Area;
 import java.io.ByteArrayInputStream;
+import java.util.ListIterator;
 import java.util.Stack;
+import java.util.prefs.Preferences;
+
+import javax.swing.JOptionPane;
 
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.jface.action.IStatusLineManager;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.ScrolledComposite;
 import org.eclipse.swt.events.MouseEvent;
+import org.eclipse.swt.events.MouseListener;
+import org.eclipse.swt.events.MouseMoveListener;
+import org.eclipse.swt.events.MouseTrackListener;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.widgets.Composite;
+import org.eclipse.ui.IActionBars;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorSite;
@@ -31,11 +40,57 @@ import tiled.core.Tile;
 import tiled.core.TileLayer;
 import tiled.io.xml.XMLMapTransformer;
 import tiled.mapeditor.brush.AbstractBrush;
+import tiled.mapeditor.brush.CustomBrush;
+import tiled.mapeditor.resources.Resources;
 import tiled.mapeditor.selection.SelectionLayer;
 import tiled.util.Converter;
+import tiled.util.TiledConfiguration;
 import tiled.view.MapView;
 
 public class MapEditor extends EditorPart {
+	
+	protected class MapMouseListener implements MouseListener, MouseMoveListener, MouseTrackListener {
+
+		@Override
+		public void mouseDoubleClick(MouseEvent e) {
+			// TODO Auto-generated method stub
+			
+		}
+
+		@Override
+		public void mouseDown(MouseEvent e) {
+			mousePressed(e);
+		}
+
+		@Override
+		public void mouseUp(MouseEvent e) {
+			mouseReleased(e);
+		}
+
+		@Override
+		public void mouseMove(MouseEvent e) {
+			mouseMoved(e);
+		}
+
+		@Override
+		public void mouseEnter(MouseEvent e) {
+			// TODO Auto-generated method stub
+			
+		}
+
+		@Override
+		public void mouseExit(MouseEvent e) {
+			// TODO Auto-generated method stub
+			
+		}
+
+		@Override
+		public void mouseHover(MouseEvent e) {
+			// TODO Auto-generated method stub
+			
+		}
+		
+	};
 	
     // Constants and the like
     private static final int PS_POINT     = 0;
@@ -48,6 +103,8 @@ public class MapEditor extends EditorPart {
     private static final int PS_ADDOBJ    = 7;
     private static final int PS_REMOVEOBJ = 8;
     private static final int PS_MOVEOBJ   = 9;
+    
+    private static final Preferences prefs = TiledConfiguration.root();
 
 	private Map currentMap;
 	private Tile currentTile;
@@ -69,6 +126,8 @@ public class MapEditor extends EditorPart {
 
 	private MapView mapView;
 	private ScrolledComposite mapScrollView;
+	private IStatusLineManager statusLineManager;
+	private MapMouseListener mouseListener = new MapMouseListener();
 
 	@Override
 	public void doSave(IProgressMonitor monitor) {
@@ -107,6 +166,10 @@ public class MapEditor extends EditorPart {
 			e.printStackTrace();
 		}
 		setPartName(input.getName());
+		IActionBars actionBars = site.getActionBars();
+		if (actionBars != null) {
+			statusLineManager = actionBars.getStatusLineManager();
+		}
 		firePropertyChange(IEditorPart.PROP_TITLE);
 	}
 
@@ -129,6 +192,9 @@ public class MapEditor extends EditorPart {
 		mapScrollView = new ScrolledComposite(composite,
 				SWT.H_SCROLL | SWT.V_SCROLL);
 		mapView = MapView.createViewforMap(mapScrollView, currentMap);
+		mapView.addMouseListener(mouseListener);
+		mapView.addMouseMoveListener(mouseListener);
+		mapView.addMouseTrackListener(mouseListener);
 		mapScrollView.setContent(mapView);
 		// Set the minimum size
 		// scrolledComposite.setMinSize(400, 400);
@@ -228,6 +294,124 @@ public class MapEditor extends EditorPart {
 
 		doMouse(e);
 	}
+	
+    public void mouseReleased(MouseEvent event) {
+        final MapLayer layer = getCurrentLayer();
+        final Point limp = mouseInitialPressLocation;
+
+        if (currentPointerState == PS_MARQUEE) {
+            // Uncommented to allow single tile selections
+            /*
+            Point tile = mapView.screenToTileCoords(event.x, event.y);
+            if (tile.y - limp.y == 0 && tile.x - limp.x == 0) {
+                if (marqueeSelection != null) {
+                    currentMap.removeLayerSpecial(marqueeSelection);
+                    marqueeSelection = null;
+                }
+            }
+            */
+
+            // There should be a proper notification mechanism for this...
+            //if (marqueeSelection != null) {
+            //    tileInstancePropertiesDialog.setSelection(marqueeSelection);
+            //}
+        } else if (currentPointerState == PS_MOVE) {
+            if (layer != null && (moveDist.x != 0 || moveDist.x != 0)) {
+//                undoSupport.postEdit(new MoveLayerEdit(layer, moveDist));
+            }
+        } else if (currentPointerState == PS_PAINT) {
+            if (layer instanceof TileLayer) {
+                currentBrush.endPaint();
+            }
+        } else if (currentPointerState == PS_MOVEOBJ) {
+            if (layer instanceof ObjectGroup && currentObject != null &&
+                    (moveDist.x != 0 || moveDist.x != 0)) {
+//                undoSupport.postEdit(
+//                        new MoveObjectEdit(currentObject, moveDist));
+            }
+        }
+
+
+        if (/*bMouseIsDragging && */currentPointerState == PS_PAINT ||
+                currentPointerState == PS_ADDOBJ)
+        {
+            Point tile = mapView.screenToTileCoords(
+                    event.x, event.y);
+            int minx = Math.min(limp.x, tile.x);
+            int miny = Math.min(limp.y, tile.y);
+
+            Rectangle bounds = new Rectangle(
+                    minx, miny,
+                    (Math.max(limp.x, tile.x) - minx) + 1,
+                    (Math.max(limp.y, tile.y) - miny) + 1);
+
+            // STAMP
+            if (mouseButton == 3 &&
+                    layer instanceof TileLayer) {
+                // Right mouse button dragged: create and set custom brush
+                TileLayer brushLayer = new TileLayer(bounds);
+                brushLayer.copyFrom(getCurrentLayer());
+                brushLayer.setOffset(tile.x - (int) bounds.width / 2,
+                                     tile.y - (int) bounds.height / 2);
+
+                // Do a quick check to make sure the selection is not empty
+                if (brushLayer.isEmpty()) {
+                    JOptionPane.showMessageDialog(null,
+                            Resources.getString("dialog.selection.empty"),
+                            Resources.getString("dialog.selection.empty"),
+                            JOptionPane.WARNING_MESSAGE);
+                } else {
+                    setBrush(new CustomBrush(brushLayer));
+                    cursorHighlight.setOffset(
+                            tile.x - (int) bounds.width / 2,
+                            tile.y - (int) bounds.height / 2);
+                }
+            }
+            else if (mouseButton == 1 &&
+                    layer instanceof ObjectGroup) {
+                // TODO: Fix this to use pixels in the first place
+                // (with optional snap to grid)
+                int w = currentMap.getTileWidth();
+                int h = currentMap.getTileHeight();
+                MapObject object = new MapObject(
+                        bounds.x * w,
+                        bounds.y * h,
+                        bounds.width * w,
+                        bounds.height * h);
+                /*Point pos = mapView.screenToPixelCoords(
+                        event.x, event.y);*/
+                ObjectGroup group = (ObjectGroup) layer;
+//                undoSupport.postEdit(new AddObjectEdit(group, object));
+                group.addObject(object);
+                mapView.redraw();
+            }
+
+            //get rid of any visible marquee
+            if (marqueeSelection != null) {
+                currentMap.removeLayerSpecial(marqueeSelection);
+                marqueeSelection = null;
+            }
+        }
+
+//        if (paintEdit != null) {
+//            if (layer != null) {
+//                try {
+//                    MapLayer endLayer = paintEdit.getStart().createDiff(layer);
+//                    paintEdit.end(endLayer);
+//                    undoSupport.postEdit(paintEdit);
+//                } catch (Exception e) {
+//                    e.printStackTrace();
+//                }
+//            }
+//            paintEdit = null;
+//        }
+
+        currentObject = null;
+
+        mouseButton = SWT.DEFAULT;
+        bMouseIsDown = false;
+        bMouseIsDragging = false;
+    }
 	
     /**
      * Returns the currently selected layer.
@@ -527,6 +711,30 @@ public class MapEditor extends EditorPart {
 //        undoSupport.postEdit(mle);
     }
     
+    public void mouseMoved(MouseEvent e) {
+        // Update state of mouse buttons
+        bMouseIsDown = e.button > 0;
+        if (bMouseIsDown) {
+            doMouse(e);
+        }
+
+        Point tile = mapView.screenToTileCoords(e.x, e.y);
+        updateTileCoordsLabel(tile);
+        updateCursorHighlight(tile);
+    }
+
+    public void mouseDragged(MouseEvent e) {
+        bMouseIsDragging = true;
+
+        doMouse(e);
+
+        mousePressLocation = mapView.screenToTileCoords(e.x, e.y);
+        Point tile = mapView.screenToTileCoords(e.x, e.y);
+
+        updateTileCoordsLabel(tile);
+        updateCursorHighlight(tile);
+    }
+    
     private static MapLayer createLayerCopy(MapLayer layer) {
         try {
             return (MapLayer) layer.clone();
@@ -534,6 +742,39 @@ public class MapEditor extends EditorPart {
         catch (CloneNotSupportedException e) {
             e.printStackTrace();
             return null;
+        }
+    }
+    
+    private void updateTileCoordsLabel(Point tile) {
+        if (currentMap.inBounds(tile.x, tile.y)) {
+        	statusLineManager.setMessage(String.valueOf(tile.x) + ", " + tile.y);
+        } else {
+        	statusLineManager.setMessage("");
+        }
+    }
+
+    private void updateCursorHighlight(Point tile) {
+        if (prefs.getBoolean("cursorhighlight", true)) {
+            Rectangle redraw = cursorHighlight.getBounds();
+            Rectangle brushRedraw = currentBrush.getBounds();
+
+            brushRedraw.x = tile.x - brushRedraw.width / 2;
+            brushRedraw.y = tile.y - brushRedraw.height / 2;
+
+            if (!redraw.equals(brushRedraw)) {
+                if (currentBrush instanceof CustomBrush) {
+                    CustomBrush customBrush = (CustomBrush) currentBrush;
+                    ListIterator<MapLayer> layers = customBrush.getLayers();
+                    while (layers.hasNext()) {
+                        MapLayer layer = layers.next();
+                        layer.setOffset(brushRedraw.x, brushRedraw.y);
+                    }
+                }
+                mapView.repaintRegion(redraw);
+                cursorHighlight.setOffset(brushRedraw.x, brushRedraw.y);
+                //cursorHighlight.selectRegion(currentBrush.getShape());
+                mapView.repaintRegion(brushRedraw);
+            }
         }
     }
 
