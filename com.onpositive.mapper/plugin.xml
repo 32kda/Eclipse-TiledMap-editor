@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+
+   <extension
+         point="org.eclipse.ui.editors">
+      <editor
+            name="Map Editor"
+            extensions="tmx"
+            icon="icons/sample.gif"
+            contributorClass="org.eclipse.ui.texteditor.BasicTextEditorActionContributor"
+            class="com.onpositive.mapper.editors.MapEditor"
+            id="com.onpositive.mapper.editors.MapEditor">
+      </editor>
+   </extension>
+   <extension
+         point="org.eclipse.ui.views">
+      <category
+            id="com.onpositive.mapper"
+            name="Mapper">
+      </category>
+      <view
+            category="com.onpositive.mapper"
+            class="com.onpositive.mapper.views.TilesetView"
+            icon="icons/sample.gif"
+            id="com.onpositive.mapper.views.TilesetView"
+            name="Tilesets">
+      </view>
+   </extension>
+   <extension
+         point="org.eclipse.help.contexts">
+      <contexts
+            file="contexts.xml">
+      </contexts>
+   </extension>
+
+</plugin>
