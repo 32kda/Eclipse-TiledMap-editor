@@ -457,7 +457,7 @@ public abstract class MapView extends Composite implements PaintListener
      * @param region the region that has changed in tile coordinates
      */
     public void repaintRegion(Rectangle region) {
-        redraw();
+        redraw(region.x,region.y,region.width,region.height,true);
     }
 
     /**

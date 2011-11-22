@@ -41,6 +41,7 @@ import tiled.core.TileLayer;
 import tiled.io.xml.XMLMapTransformer;
 import tiled.mapeditor.brush.AbstractBrush;
 import tiled.mapeditor.brush.CustomBrush;
+import tiled.mapeditor.brush.ShapeBrush;
 import tiled.mapeditor.resources.Resources;
 import tiled.mapeditor.selection.SelectionLayer;
 import tiled.util.Converter;
@@ -196,6 +197,14 @@ public class MapEditor extends EditorPart {
 		mapView.addMouseMoveListener(mouseListener);
 		mapView.addMouseTrackListener(mouseListener);
 		mapScrollView.setContent(mapView);
+		
+        cursorHighlight = new SelectionLayer(1, 1);
+        cursorHighlight.select(0, 0);
+        cursorHighlight.setVisible(prefs.getBoolean("cursorhighlight", true));
+        
+        ShapeBrush sb = new ShapeBrush();
+        sb.makeQuadBrush(new Rectangle(0, 0, 1, 1));
+        setBrush(sb);
 		// Set the minimum size
 		// scrolledComposite.setMinSize(400, 400);
 
