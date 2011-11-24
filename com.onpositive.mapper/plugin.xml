@@ -26,6 +26,13 @@
             id="com.onpositive.mapper.views.TilesetView"
             name="Tilesets">
       </view>
+      <view
+            category="com.onpositive.mapper"
+            class="com.onpositive.mapper.views.LayerView"
+            icon="icons/sample.gif"
+            id="com.onpositive.mapper.views.LayerView"
+            name="Layer View">
+      </view>
    </extension>
    <extension
          point="org.eclipse.help.contexts">

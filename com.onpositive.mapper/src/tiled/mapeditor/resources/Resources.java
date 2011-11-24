@@ -1,7 +1,9 @@
 package tiled.mapeditor.resources;
 
+import java.util.Locale;
 import java.util.ResourceBundle;
 
+import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.widgets.Display;
 
@@ -9,9 +11,12 @@ import org.eclipse.swt.widgets.Display;
 public class Resources {
 	
 	// The resource bundle used by this class
+//    private static final ResourceBundle resourceBundle =
+//            ResourceBundle.getBundle(
+//                    Resources.class.getPackage().getName() + ".resources.gui");
     private static final ResourceBundle resourceBundle =
             ResourceBundle.getBundle(
-                    Resources.class.getPackage().getName() + ".resources.gui");
+                    Resources.class.getPackage().getName() + ".gui",Locale.ENGLISH);
 
     // Prevent instanciation
     private Resources() {
@@ -29,5 +34,9 @@ public class Resources {
 	
 	public static Image getIcon(String id) {
 		return new Image(Display.getDefault(),Resources.class.getResourceAsStream(id));
+	}
+
+	public static ImageDescriptor getImageDescriptor(String key) {
+		return ImageDescriptor.createFromFile(Resources.class,key);
 	}
 }

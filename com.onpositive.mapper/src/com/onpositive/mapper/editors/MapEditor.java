@@ -786,5 +786,43 @@ public class MapEditor extends EditorPart {
             }
         }
     }
+    
+    public void setCurrentLayer(int index) {
+        if (currentMap != null) {
+            int totalLayers = currentMap.getTotalLayers();
+            if (totalLayers > index && index >= 0) {
+                /*
+                if (paintEdit != null) {
+                    MapLayer layer = getCurrentLayer();
+                    try {
+                        MapLayer endLayer =
+                            paintEdit.getStart().createDiff(layer);
+                        if (endLayer != null) {
+                            endLayer.setId(layer.getId());
+                            endLayer.setOffset(layer.getBounds().x,layer.getBounds().y);
+                        }
+                        paintEdit.end(endLayer);
+                        undoSupport.postEdit(paintEdit);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+                */
+                currentLayer = index;
+//                layerTable.changeSelection(totalLayers - currentLayer - 1, 0,
+//                        false, false);
+            }
+        }
+    }
+    
+    /**
+     * Returns the currently selected layer index.
+     *
+     * @return the currently selected layer index
+     */
+    public int getCurrentLayerIndex() {
+        return currentLayer;
+    }
+
 
 }
