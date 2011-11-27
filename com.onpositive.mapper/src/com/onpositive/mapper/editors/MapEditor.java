@@ -33,11 +33,14 @@ import org.eclipse.ui.editors.text.FileDocumentProvider;
 import org.eclipse.ui.part.EditorPart;
 
 import tiled.core.Map;
+import tiled.core.MapChangeListener;
+import tiled.core.MapChangedEvent;
 import tiled.core.MapLayer;
 import tiled.core.MapObject;
 import tiled.core.ObjectGroup;
 import tiled.core.Tile;
 import tiled.core.TileLayer;
+import tiled.core.TileSet;
 import tiled.io.xml.XMLMapTransformer;
 import tiled.mapeditor.brush.AbstractBrush;
 import tiled.mapeditor.brush.CustomBrush;
@@ -50,6 +53,8 @@ import tiled.view.MapView;
 
 public class MapEditor extends EditorPart {
 	
+	public static final String CURRENT_LAYER_PROP = "currentLayer";
+
 	protected class MapMouseListener implements MouseListener, MouseMoveListener, MouseTrackListener {
 
 		@Override
@@ -197,6 +202,28 @@ public class MapEditor extends EditorPart {
 		mapView.addMouseMoveListener(mouseListener);
 		mapView.addMouseTrackListener(mouseListener);
 		mapScrollView.setContent(mapView);
+		currentMap.addMapChangeListener(new MapChangeListener() {
+			
+			@Override
+			public void tilesetsSwapped(MapChangedEvent e, int index0, int index1) {
+				// TODO Auto-generated method stub
+			}
+			
+			@Override
+			public void tilesetRemoved(MapChangedEvent e, int index) {
+				mapView.redraw();
+			}
+			
+			@Override
+			public void tilesetAdded(MapChangedEvent e, TileSet tileset) {
+				// TODO Auto-generated method stub
+			}
+			
+			@Override
+			public void mapChanged(MapChangedEvent e) {
+				mapView.redraw();
+			}
+		});
 		
         cursorHighlight = new SelectionLayer(1, 1);
         cursorHighlight.select(0, 0);
@@ -302,6 +329,7 @@ public class MapEditor extends EditorPart {
 		}
 
 		doMouse(e);
+		bMouseIsDragging = true;
 	}
 	
     public void mouseReleased(MouseEvent event) {
@@ -510,7 +538,8 @@ public class MapEditor extends EditorPart {
             int maxY = viewSize.y - viewportSize.y;
             newPosition.x = Math.min(maxX, Math.max(0, newPosition.x));
             newPosition.y = Math.min(maxY, Math.max(0, newPosition.y));
-
+            
+            mapScrollView.setOrigin(newPosition);
 //            mapViewPort.setViewPosition(newPosition);
         } else if (mouseButton == 1) {
             switch (currentPointerState) {
@@ -723,7 +752,7 @@ public class MapEditor extends EditorPart {
     public void mouseMoved(MouseEvent e) {
         // Update state of mouse buttons
         bMouseIsDown = e.button > 0;
-        if (bMouseIsDown) {
+        if (bMouseIsDragging) { //Was bMouseIsDown
             doMouse(e);
         }
 
@@ -808,7 +837,9 @@ public class MapEditor extends EditorPart {
                     }
                 }
                 */
+            	int oldCurLayer = currentLayer;
                 currentLayer = index;
+                firePartPropertyChanged(CURRENT_LAYER_PROP,""+oldCurLayer,""+currentLayer);
 //                layerTable.changeSelection(totalLayers - currentLayer - 1, 0,
 //                        false, false);
             }
