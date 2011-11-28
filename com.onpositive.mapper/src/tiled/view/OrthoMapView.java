@@ -112,12 +112,15 @@ public class OrthoMapView extends MapView
 
                 if (tile != null) {
                     if (layer instanceof SelectionLayer) {
+                    	tile.draw(gc, gx, gy, zoom);
                         Transform transform = new Transform(getDisplay());
                         transform.translate(gx,gy);
                 		gc.setTransform(transform);
+                		gc.setAlpha(150);
                         gc.fillPolygon(Converter.getPolygonArray(gridPoly));
-                        transform.dispose();
+                        gc.setAlpha(255);
                         gc.setTransform(null);
+                        transform.dispose();
                         //paintEdge(g, layer, gx, gy);
                     }
                     else {

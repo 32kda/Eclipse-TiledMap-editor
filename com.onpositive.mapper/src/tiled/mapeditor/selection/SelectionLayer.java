@@ -179,4 +179,9 @@ public class SelectionLayer extends TileLayer
             }
         }
     }
+
+	public void setSelTile(Tile currentTile) {
+		selTile = currentTile;
+		fillRegion(getSelectedArea(),selTile);
+	}
 }

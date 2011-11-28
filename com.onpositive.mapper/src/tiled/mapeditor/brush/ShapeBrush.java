@@ -109,7 +109,10 @@ public class ShapeBrush extends AbstractBrush
         gc.fillPath(path);
     }
 
-    public void drawPreview(GC g2d, MapView mv) {
+    public void drawPreview(GC gc, MapView mv) {
+       	PathIterator pathIterator = shape.getPathIterator(null);
+    	Path path = Converter.pathIterator2Path(pathIterator);
+        gc.fillPath(path);
     }
 
     public boolean equals(Brush brush) {
