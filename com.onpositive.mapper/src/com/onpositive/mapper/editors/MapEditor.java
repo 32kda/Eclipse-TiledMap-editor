@@ -53,13 +53,14 @@ import tiled.mapeditor.brush.CustomBrush;
 import tiled.mapeditor.brush.ShapeBrush;
 import tiled.mapeditor.resources.Resources;
 import tiled.mapeditor.selection.SelectionLayer;
+import tiled.mapeditor.util.LayerTableModel;
 import tiled.mapeditor.util.MapEventAdapter;
 import tiled.mapeditor.widget.BrushPreview;
 import tiled.util.Converter;
 import tiled.util.TiledConfiguration;
 import tiled.view.MapView;
 
-public class MapEditor extends EditorPart {
+public class MapEditor extends EditorPart implements MapChangeListener {
 
 	public static final String CURRENT_LAYER_PROP = "currentLayer";
 
@@ -214,29 +215,7 @@ public class MapEditor extends EditorPart {
 		mapView.addMouseMoveListener(mouseListener);
 		mapView.addMouseTrackListener(mouseListener);
 		mapScrollView.setContent(mapView);
-		currentMap.addMapChangeListener(new MapChangeListener() {
-
-			@Override
-			public void tilesetsSwapped(MapChangedEvent e, int index0,
-					int index1) {
-				// TODO Auto-generated method stub
-			}
-
-			@Override
-			public void tilesetRemoved(MapChangedEvent e, int index) {
-				mapView.redraw();
-			}
-
-			@Override
-			public void tilesetAdded(MapChangedEvent e, TileSet tileset) {
-				// TODO Auto-generated method stub
-			}
-
-			@Override
-			public void mapChanged(MapChangedEvent e) {
-				mapView.redraw();
-			}
-		});
+		currentMap.addMapChangeListener(this);
 
 		cursorHighlight = new SelectionLayer(1, 1);
 		cursorHighlight.select(0, 0);
@@ -886,8 +865,10 @@ public class MapEditor extends EditorPart {
 			}
 		}
 		setCurrentTile(firstTile);
+		setCurrentPointerState(PS_PAINT);
 
 		currentMap.addLayerSpecial(cursorHighlight);
+		updateLayerInfo();
 	}
 
 	public void setCurrentLayer(int index) {
@@ -920,6 +901,82 @@ public class MapEditor extends EditorPart {
 	 */
 	public int getCurrentLayerIndex() {
 		return currentLayer;
+	}
+	
+    private void setCurrentPointerState(int state) {
+        /*
+        if (currentPointerState == PS_MARQUEE && state != PS_MARQUEE) {
+            // Special logic for selection
+            if (marqueeSelection != null) {
+                currentMap.removeLayerSpecial(marqueeSelection);
+                marqueeSelection = null;
+            }
+        }
+        */
+
+        currentPointerState = state;
+
+        // Select the matching button  //TODO
+//        paintButton.setSelected(state == PS_PAINT);
+//        eraseButton.setSelected(state == PS_ERASE);
+//        pourButton.setSelected(state == PS_POUR);
+//        eyedButton.setSelected(state == PS_EYED);
+//        marqueeButton.setSelected(state == PS_MARQUEE);
+//        moveButton.setSelected(state == PS_MOVE);
+//        objectAddButton.setSelected(state == PS_ADDOBJ);
+//        objectRemoveButton.setSelected(state == PS_REMOVEOBJ);
+//        objectMoveButton.setSelected(state == PS_MOVEOBJ);
+
+        // Set the matching cursor //TODO
+//        if (mapView != null) {
+//            switch (currentPointerState) {
+//                case PS_PAINT:
+//                case PS_ERASE:
+//                case PS_POINT:
+//                case PS_POUR:
+//                case PS_MARQUEE:
+//                    mapView.setCursor(curDefault);
+//                    break;
+//                case PS_EYED:
+//                    mapView.setCursor(curEyed);
+//                    break;
+//            }
+//        }
+    }
+    
+    private void updateLayerInfo() {
+        int cl = currentLayer;
+      
+        if (currentMap != null) {
+            if (currentMap.getTotalLayers() > 0 && cl == -1) {
+                cl = 0;
+            }
+
+            setCurrentLayer(cl);
+        }
+
+    }
+    
+	@Override
+	public void tilesetsSwapped(MapChangedEvent e, int index0,
+			int index1) {
+		// TODO Auto-generated method stub
+	}
+
+	@Override
+	public void tilesetRemoved(MapChangedEvent e, int index) {
+		mapView.redraw();
+	}
+
+	@Override
+	public void tilesetAdded(MapChangedEvent e, TileSet tileset) {
+		// TODO Auto-generated method stub
+	}
+
+	@Override
+	public void mapChanged(MapChangedEvent e) {
+		updateLayerInfo();
+		mapView.redraw();
 	}
 
 }

@@ -71,6 +71,7 @@ public abstract class MapView extends Composite implements PaintListener
     
     protected Color defaultBgColor;
     protected Color defaultGridColor;
+	protected RGB DEFAULT_SEL_COLOR = new RGB(0,0,200);
 
     /**
      * Creates a new <code>MapView</code> that displays the specified map.
@@ -289,6 +290,8 @@ public abstract class MapView extends Composite implements PaintListener
 //                        g2d.setComposite(AlphaComposite.getInstance(
 //                                AlphaComposite.SRC_ATOP, 0.3f));
                         g2d.setForeground(
+                                ((SelectionLayer) layer).getHighlightColor());
+                        g2d.setBackground(
                                 ((SelectionLayer) layer).getHighlightColor());
                     }
                     paintLayer(g2d, (TileLayer) layer);

@@ -13,13 +13,13 @@
 package tiled.view;
 
 import java.awt.Polygon;
-import java.awt.font.FontRenderContext;
-import java.awt.geom.Rectangle2D;
 import java.util.Iterator;
 import java.util.Properties;
+
 import javax.swing.SwingConstants;
 
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.graphics.Point;
@@ -27,7 +27,11 @@ import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.graphics.Transform;
 import org.eclipse.swt.widgets.Composite;
 
-import tiled.core.*;
+import tiled.core.Map;
+import tiled.core.MapObject;
+import tiled.core.ObjectGroup;
+import tiled.core.Tile;
+import tiled.core.TileLayer;
 import tiled.mapeditor.selection.SelectionLayer;
 import tiled.util.Converter;
 
@@ -36,7 +40,9 @@ import tiled.util.Converter;
  */
 public class OrthoMapView extends MapView
 {
-    private Polygon propPoly;
+	protected static final int SEL_HOVER_ALPHA = 50;
+	protected Polygon propPoly;
+    protected Color selColor;
 
     /**
      * Creates a new orthographic map view that displays the specified map.
@@ -54,6 +60,7 @@ public class OrthoMapView extends MapView
         
         Point preferredSize = getPreferredSize();
         setBounds(0,0,preferredSize.x,preferredSize.y);
+        selColor = new Color(parent.getDisplay(),DEFAULT_SEL_COLOR);
     }
 
     public int getScrollableBlockIncrement(Rectangle visibleRect,
@@ -116,7 +123,7 @@ public class OrthoMapView extends MapView
                         Transform transform = new Transform(getDisplay());
                         transform.translate(gx,gy);
                 		gc.setTransform(transform);
-                		gc.setAlpha(150);
+                		gc.setAlpha(SEL_HOVER_ALPHA);
                         gc.fillPolygon(Converter.getPolygonArray(gridPoly));
                         gc.setAlpha(255);
                         gc.setTransform(null);
