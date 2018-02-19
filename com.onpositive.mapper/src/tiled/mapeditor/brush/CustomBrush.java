@@ -79,7 +79,7 @@ public class CustomBrush extends AbstractBrush
 
         super.doPaint(x, y);
 
-        ListIterator itr = getLayers();
+        ListIterator<?> itr = getLayers();
         while (itr.hasNext()) {
             TileLayer tl = (TileLayer)itr.next();
             TileLayer tm = (TileLayer)affectedMp.getLayer(layer++);

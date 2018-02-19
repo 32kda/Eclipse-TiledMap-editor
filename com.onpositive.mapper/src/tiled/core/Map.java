@@ -26,21 +26,22 @@ import tiled.mapeditor.resources.Resources;
  */
 public class Map extends MultilayerPlane
 {
-    /** Orthogonal. */
-    public static final int MDO_ORTHO   = 1;
+	
+	/** Orthogonal. */
+    public static final int ORIENTATION_ORTHOGONAL = 1;
     /** Isometric. */
-    public static final int MDO_ISO     = 2;
+    public static final int ORIENTATION_ISOMETRIC = 2;
     /** Hexagonal. */
-    public static final int MDO_HEX     = 4;
+    public static final int ORIENTATION_HEXAGONAL = 4;
     /** Shifted (used for iso and hex). */
-    public static final int MDO_SHIFTED = 5;
+    public static final int ORIENTATION_SHIFTED = 5;
 
     private Vector<MapLayer> specialLayers;
     private Vector<TileSet> tilesets;
     private LinkedList<MapObject> objects;
 
     private int tileWidth, tileHeight;
-    private int orientation = MDO_ORTHO;
+    private int orientation = ORIENTATION_ORTHOGONAL;
     private final List<MapChangeListener> mapChangeListeners = new LinkedList<MapChangeListener>();
     private Properties properties;
     private String filename;
@@ -80,12 +81,25 @@ public class Map extends MultilayerPlane
     /**
      * Notifies all registered map change listeners about a change.
      */
-    protected void fireMapChanged() {
+    public void fireMapChanged() {
         Iterator<MapChangeListener> iterator = mapChangeListeners.iterator();
         MapChangedEvent event = null;
 
         while (iterator.hasNext()) {
             if (event == null) event = new MapChangedEvent(this);
+            ((MapChangeListener) iterator.next()).mapChanged(event);
+        }
+    }
+    
+    /**
+     * Notifies all registered map change listeners about a change.
+     */
+    public void fireMapChanged(int eventType) {
+        Iterator<MapChangeListener> iterator = mapChangeListeners.iterator();
+        MapChangedEvent event = null;
+
+        while (iterator.hasNext()) {
+            if (event == null) event = new MapChangedEvent(this,eventType);
             ((MapChangeListener) iterator.next()).mapChanged(event);
         }
     }
@@ -147,13 +161,14 @@ public class Map extends MultilayerPlane
     public void addLayerSpecial(MapLayer layer) {
         layer.setMap(this);
         specialLayers.add(layer);
-        fireMapChanged();
+        if (!(layer instanceof ISelectionLayer))
+        	fireMapChanged(MapChangedEvent.LAYER_CHANGE);
     }
 
     public MapLayer addLayer(MapLayer layer) {
         layer.setMap(this);
         super.addLayer(layer);
-        fireMapChanged();
+        fireMapChanged(MapChangedEvent.LAYER_CHANGE);
         return layer;
     }
 
@@ -168,14 +183,14 @@ public class Map extends MultilayerPlane
         layer.setName(Resources.getString("general.layer.layer") +
                       " " + super.getTotalLayers());
         super.addLayer(layer);
-        fireMapChanged();
+        fireMapChanged(MapChangedEvent.LAYER_CHANGE);
         return layer;
     }
 
     public void setLayer(int index, MapLayer layer) {
         layer.setMap(this);
         super.setLayer(index, layer);
-        fireMapChanged();
+        fireMapChanged(MapChangedEvent.LAYER_CHANGE);
     }
 
     /**
@@ -189,7 +204,7 @@ public class Map extends MultilayerPlane
         layer.setName(Resources.getString("general.objectgroup.objectgroup") +
                       " " + super.getTotalLayers());
         super.addLayer(layer);
-        fireMapChanged();
+        fireMapChanged(MapChangedEvent.LAYER_CHANGE);
         return layer;
     }
 
@@ -279,19 +294,22 @@ public class Map extends MultilayerPlane
      */
     public MapLayer removeLayer(int index) {
         MapLayer layer = super.removeLayer(index);
-        fireMapChanged();
+        fireMapChanged(MapChangedEvent.LAYER_CHANGE);
         return layer;
     }
 
     public void removeLayerSpecial(MapLayer layer) {
         if (specialLayers.remove(layer)) {
-            fireMapChanged();
+        	layer.setMap(null);
+        	if (!(layer instanceof ISelectionLayer)) {
+        		fireMapChanged(MapChangedEvent.LAYER_CHANGE);
+        	}
         }
     }
 
     public void removeAllSpecialLayers() {
         specialLayers.clear();
-        fireMapChanged();
+        fireMapChanged(MapChangedEvent.LAYER_CHANGE);
     }
 
     /**
@@ -301,7 +319,7 @@ public class Map extends MultilayerPlane
      */
     public void removeAllLayers() {
         super.removeAllLayers();
-        fireMapChanged();
+        fireMapChanged(MapChangedEvent.LAYER_CHANGE);
     }
 
     /**
@@ -311,7 +329,7 @@ public class Map extends MultilayerPlane
      */
     public void setLayerVector(Vector<MapLayer> layers) {
         super.setLayerVector(layers);
-        fireMapChanged();
+        fireMapChanged(MapChangedEvent.LAYER_CHANGE);
     }
 
     /**
@@ -321,7 +339,7 @@ public class Map extends MultilayerPlane
      */
     public void swapLayerUp(int index) {
         super.swapLayerUp(index);
-        fireMapChanged();
+        fireMapChanged(MapChangedEvent.LAYER_CHANGE);
     }
 
     /**
@@ -331,7 +349,7 @@ public class Map extends MultilayerPlane
      */
     public void swapLayerDown(int index) {
         super.swapLayerDown(index);
-        fireMapChanged();
+        fireMapChanged(MapChangedEvent.LAYER_CHANGE);
     }
 
     /**
@@ -341,7 +359,7 @@ public class Map extends MultilayerPlane
      */
     public void mergeLayerDown(int index) {
         super.mergeLayerDown(index);
-        fireMapChanged();
+        fireMapChanged(MapChangedEvent.LAYER_CHANGE);
     }
 
     public void setFilename(String filename) {

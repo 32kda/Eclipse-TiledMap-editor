@@ -1,24 +1,36 @@
 package com.onpositive.mapper.editors;
 
-import java.awt.Color;
-import java.awt.Dimension;
 import java.awt.geom.Area;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.net.URI;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.ListIterator;
 import java.util.Stack;
 import java.util.Vector;
 import java.util.prefs.Preferences;
 
-import javax.swing.Box;
-import javax.swing.JOptionPane;
-import javax.swing.JViewport;
-
+import org.eclipse.core.commands.ExecutionException;
+import org.eclipse.core.commands.operations.AbstractOperation;
+import org.eclipse.core.commands.operations.IOperationHistory;
+import org.eclipse.core.commands.operations.IOperationHistoryListener;
+import org.eclipse.core.commands.operations.IUndoContext;
+import org.eclipse.core.commands.operations.ObjectUndoContext;
+import org.eclipse.core.commands.operations.OperationHistoryEvent;
+import org.eclipse.core.resources.IFile;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.jface.action.Action;
 import org.eclipse.jface.action.IStatusLineManager;
+import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.jface.text.IDocument;
+import org.eclipse.jface.text.source.IAnnotationModel;
+import org.eclipse.jface.util.IPropertyChangeListener;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.ScrolledComposite;
 import org.eclipse.swt.events.MouseEvent;
@@ -29,14 +41,31 @@ import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IActionBars;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorSite;
+import org.eclipse.ui.IMemento;
+import org.eclipse.ui.IPartListener2;
 import org.eclipse.ui.IPathEditorInput;
+import org.eclipse.ui.IPersistableEditor;
+import org.eclipse.ui.IURIEditorInput;
+import org.eclipse.ui.IWorkbenchCommandConstants;
+import org.eclipse.ui.IWorkbenchPartReference;
+import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PartInitException;
+import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.WorkbenchException;
+import org.eclipse.ui.actions.ActionFactory;
+import org.eclipse.ui.contexts.IContextActivation;
+import org.eclipse.ui.contexts.IContextService;
 import org.eclipse.ui.editors.text.FileDocumentProvider;
+import org.eclipse.ui.ide.ResourceUtil;
+import org.eclipse.ui.operations.RedoActionHandler;
+import org.eclipse.ui.operations.UndoActionHandler;
 import org.eclipse.ui.part.EditorPart;
+import org.eclipse.ui.part.FileEditorInput;
 
 import tiled.core.Map;
 import tiled.core.MapChangeListener;
@@ -44,33 +73,119 @@ import tiled.core.MapChangedEvent;
 import tiled.core.MapLayer;
 import tiled.core.MapObject;
 import tiled.core.ObjectGroup;
+import tiled.core.ObjectSelectionLayer;
 import tiled.core.Tile;
 import tiled.core.TileLayer;
 import tiled.core.TileSet;
-import tiled.io.xml.XMLMapTransformer;
+import tiled.io.TMXMapReader;
+import tiled.io.TMXMapWriter;
 import tiled.mapeditor.brush.AbstractBrush;
 import tiled.mapeditor.brush.CustomBrush;
+import tiled.mapeditor.brush.ITileBrush;
 import tiled.mapeditor.brush.ShapeBrush;
 import tiled.mapeditor.resources.Resources;
 import tiled.mapeditor.selection.SelectionLayer;
-import tiled.mapeditor.util.LayerTableModel;
-import tiled.mapeditor.util.MapEventAdapter;
+import tiled.mapeditor.undo.AddObjectsEdit;
+import tiled.mapeditor.undo.MapLayerEdit;
+import tiled.mapeditor.undo.MoveLayerEdit;
+import tiled.mapeditor.undo.MoveObjectsEdit;
 import tiled.mapeditor.widget.BrushPreview;
 import tiled.util.Converter;
 import tiled.util.TiledConfiguration;
 import tiled.view.MapView;
 
-public class MapEditor extends EditorPart implements MapChangeListener {
+import com.onpositive.mapper.MapperPlugin;
+import com.onpositive.mapper.actions.CopyAction;
+import com.onpositive.mapper.actions.PasteAction;
+import com.onpositive.mapper.dialogs.ObjectPropertyDialog;
+import com.onpositive.mapper.dragging.IDragger;
+import com.onpositive.mapper.dragging.ObjectResizeDragger;
+import com.onpositive.mapper.dragging.ObjectSelectionDragger;
+import com.onpositive.mapper.perspective.MapperPerspective;
+import com.onpositive.mapper.ui.UIUtil;
+
+/**
+ * Main Editor class for Map Editor Part
+ * Based on Tiled Java
+ * @author Dmitry Karpenko
+ *
+ */
+public class MapEditor extends EditorPart implements MapChangeListener, ILocalUndoSupport, IPersistableEditor {
+
 
 	public static final String CURRENT_LAYER_PROP = "currentLayer";
+	
+	private static final String SHOW_GRID_PROP = "SHOW_GRID_PROP";
+	private static final String SNAP_TO_GRID_PROP = "SNAP_TO_GRID_PROP";
+	private static final String HIGHLIGHT_CURRENT_LAYER_PROP = "HIGHLIGHT_CURRENT_LAYER_PROP";
+	
+	protected static class PartListener implements IPartListener2 {
+		private static final String MAPPER_CONTEXT_ID = "com.onpositive.mapper.context";
+		private static final IContextService service = (IContextService) PlatformUI.getWorkbench().getService(IContextService.class);
+		private static IContextActivation activation;
+		
+		@Override
+		public void partActivated(IWorkbenchPartReference partRef) {
+			if (partRef.getId().indexOf("mapper") > 0 && UIUtil.getActiveEditor() instanceof MapEditor) {
+				if (activation == null) {
+				activation = service.activateContext(MAPPER_CONTEXT_ID);
+				}
+			} else if (activation != null) {
+				service.deactivateContext(activation);
+				activation = null;
+			}
+		}
+
+		@Override
+		public void partBroughtToTop(IWorkbenchPartReference partRef) {
+			// Do nothing
+			
+		}
+
+		@Override
+		public void partClosed(IWorkbenchPartReference partRef) {
+			// Do nothing
+			
+		}
+
+		@Override
+		public void partDeactivated(IWorkbenchPartReference partRef) {
+			// Do nothing
+			
+		}
+
+		@Override
+		public void partOpened(IWorkbenchPartReference partRef) {
+			// Do nothing
+			
+		}
+
+		@Override
+		public void partHidden(IWorkbenchPartReference partRef) {
+			// Do nothing
+			
+		}
+
+		@Override
+		public void partVisible(IWorkbenchPartReference partRef) {
+			// Do nothing
+			
+		}
+
+		@Override
+		public void partInputChanged(IWorkbenchPartReference partRef) {
+			// Do nothing
+			
+		}
+		
+	}
 
 	protected class MapMouseListener implements MouseListener,
 			MouseMoveListener, MouseTrackListener {
 
 		@Override
 		public void mouseDoubleClick(MouseEvent e) {
-			// TODO Auto-generated method stub
-
+			// Do nothing
 		}
 
 		@Override
@@ -90,38 +205,53 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 
 		@Override
 		public void mouseEnter(MouseEvent e) {
-			// TODO Auto-generated method stub
-
+			// Do nothing
 		}
 
 		@Override
 		public void mouseExit(MouseEvent e) {
-			// TODO Auto-generated method stub
-
+			// Do nothing
 		}
 
 		@Override
 		public void mouseHover(MouseEvent e) {
-			// TODO Auto-generated method stub
-
+			// Do nothing
 		}
 
 	};
 
 	// Constants and the like
-	private static final int PS_POINT = 0;
-	private static final int PS_PAINT = 1;
-	private static final int PS_ERASE = 2;
-	private static final int PS_POUR = 3;
-	private static final int PS_EYED = 4;
-	private static final int PS_MARQUEE = 5;
-	private static final int PS_MOVE = 6;
-	private static final int PS_ADDOBJ = 7;
-	private static final int PS_REMOVEOBJ = 8;
-	private static final int PS_MOVEOBJ = 9;
+	public static final String POINTER_STATE_PROP = "POINTER_STATE_PROP";
+	
+	public static final String MARQEE_SELECTION_PROP = "MARQEE_SELECTION_PROP";
+	public static final String OBJECT_SELECTION_PROP = "OBJECT_SELECTION_PROP";
+	public static final String CLIPBOARD_CONTENT_PROP = "CLIPBOARD_CONTENT_PROP";
+	
+	public static final int PS_POINT = 0;
+	public static final int PS_PAINT = 1;
+	public static final int PS_ERASE = 2;
+	public static final int PS_POUR = 3;
+	public static final int PS_EYED = 4;
+	public static final int PS_MARQUEE = 5;
+	public static final int PS_MOVE = 6;
+	public static final int PS_ADDOBJ = 7;
+	public static final int PS_REMOVEOBJ = 8;
+	public static final int PS_MOVEOBJ = 9;
+	public static final int PS_RESIZEOBJ = 10;
 
+	private static final String TOOL_PAINT = Resources.getString("tool.paint.name");
+	private static final String TOOL_ERASE = Resources.getString("tool.erase.name");
+	private static final String TOOL_FILL = Resources.getString("tool.fill.name");
+//	private static final String TOOL_EYE_DROPPER = Resources.getString("tool.eyedropper.name");
+//	private static final String TOOL_SELECT = Resources.getString("tool.select.name");
+//	private static final String TOOL_MOVE_LAYER = Resources.getString("tool.movelayer.name");
+//	private static final String TOOL_ADD_OBJECT = Resources.getString("tool.addobject.name");
+//	private static final String TOOL_REMOVE_OBJECT = Resources.getString("tool.removeobject.name");
+//	private static final String TOOL_MOVE_OBJECT = Resources.getString("tool.moveobject.name");
 	private static final Preferences prefs = TiledConfiguration.root();
 
+	private static IPartListener2 mapEditorListener = new PartListener();
+	
 	private Map currentMap;
 	private Tile currentTile;
 	private AbstractBrush currentBrush;
@@ -145,17 +275,59 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 	private IStatusLineManager statusLineManager;
 	private MapMouseListener mouseListener = new MapMouseListener();
 	private BrushPreview brushPreview;
+	private FileDocumentProvider documentProvider;
+	private boolean dirty = false;
+	private boolean snapToGrid = false;
+	private IDocument document;
+	private boolean init;
+	private IOperationHistory operationHistory;
+	private MapLayerEdit paintEdit;
+	private IUndoContext undoContext = new ObjectUndoContext(this,"MapEditor");
 
-	@Override
+	private UndoActionHandler undoAction;
+	private RedoActionHandler redoAction;
+	
+	private Action copyAction;
+	private Action pasteAction;
+
+	private MapLayer clipboardLayer;
+
+	private Point initialObjectLocation;
+
+	private List<IDragger> draggers = new ArrayList<IDragger>();
+	private IDragger currentDragger;
+
+	private String basePath = "";
+
+	private IMemento initMemento;
+
+	private IOperationHistoryListener editorUndoListener;
+	
+    @Override
 	public void doSave(IProgressMonitor monitor) {
-		// TODO Auto-generated method stub
-
+		try {
+			String basePath = "/.";
+			IEditorInput input = getEditorInput();
+			if (input instanceof IPathEditorInput) {
+				IPath path = ((IPathEditorInput) input).getPath();
+				basePath = path.toOSString();
+			}
+			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+			new TMXMapWriter().writeMap(currentMap, outputStream, basePath);
+			byte[] bytes = outputStream.toByteArray();
+			document.set(new String(bytes));
+			documentProvider.saveDocument(monitor,input,document,true);
+			setDirty(false);
+		} catch (CoreException e) {
+			e.printStackTrace();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 	}
 
 	@Override
 	public void doSaveAs() {
-		// TODO Auto-generated method stub
-
+		// TODO Implement it
 	}
 
 	@Override
@@ -163,25 +335,78 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 			throws PartInitException {
 		setSite(site);
 		setInput(input);
+		operationHistory = PlatformUI.getWorkbench().getOperationSupport().getOperationHistory();
 		try {
-			FileDocumentProvider documentProvider = new FileDocumentProvider();
+			documentProvider = new FileDocumentProvider();
 			documentProvider.connect(input);
-			IDocument document = documentProvider.getDocument(input);
+			document = documentProvider.getDocument(input);
+			
+			
+			IAnnotationModel annotationModel = documentProvider.getAnnotationModel(input);
+			if (annotationModel != null)
+				annotationModel.connect(document);
 			if (input instanceof IPathEditorInput) {
 				IPath path = ((IPathEditorInput) input).getPath();
-				System.out.println(path.toOSString());
-				currentMap = new XMLMapTransformer().readMap(
-						new ByteArrayInputStream(document.get().getBytes()),
+				loadMapFromPath(path);
+				setBasePathFrom(path.toFile());
+			} else if (input instanceof FileEditorInput) {
+				IFile file = ResourceUtil.getFile(input);
+				IPath path = file.getLocation(); 
+				currentMap = new TMXMapReader().readMap(
+						((FileEditorInput) input).getFile().getContents(),
 						path.toFile());
-			} else
-				currentMap = new XMLMapTransformer()
-						.readMap(new ByteArrayInputStream(document.get()
-								.getBytes()));
+				setBasePathFrom(path.toFile());
+			} else if (input instanceof IURIEditorInput) {
+				URI uri = ((IURIEditorInput) input).getURI();
+				File mapFile = new File(uri);
+				currentMap = new TMXMapReader().readMap(
+						new ByteArrayInputStream(document.get().getBytes()),mapFile);
+			} else {	
+				IFile file = ResourceUtil.getFile(input);
+				if (file != null) {
+					IPath path = file.getLocation(); 
+					currentMap = new TMXMapReader().readMap(
+							((FileEditorInput) input).getFile().getContents(),
+							path.toFile());
+				} else {
+					currentMap = new TMXMapReader()
+							.readMap(new ByteArrayInputStream(document.get()
+									.getBytes()));
+				}
+			}
+			IActionBars actionBars = getEditorSite().getActionBars();
+			undoAction= new UndoActionHandler(getSite(), undoContext);
+			undoAction.setActionDefinitionId(IWorkbenchCommandConstants.EDIT_UNDO);
+			redoAction= new RedoActionHandler(getSite(), undoContext);
+			redoAction.setActionDefinitionId(IWorkbenchCommandConstants.EDIT_REDO);
+			
+			copyAction = new CopyAction(this);
+			copyAction.setActionDefinitionId(IWorkbenchCommandConstants.EDIT_COPY);
+			addPartPropertyListener((IPropertyChangeListener) copyAction);
+			copyAction.setEnabled(false);
+			pasteAction = new PasteAction(this);
+			pasteAction.setActionDefinitionId(IWorkbenchCommandConstants.EDIT_PASTE);
+			addPartPropertyListener((IPropertyChangeListener) pasteAction);
+			pasteAction.setEnabled(false);
+
+			registerGlobalActionHandlers(actionBars);
+			
+			editorUndoListener = new IOperationHistoryListener() {
+				
+				@Override
+				public void historyNotification(OperationHistoryEvent event) {
+					if (event.getEventType() == OperationHistoryEvent.UNDONE ||
+						event.getEventType() == OperationHistoryEvent.REDONE)
+						mapChanged(null);
+				}
+			};
+			operationHistory.addOperationHistoryListener(editorUndoListener);
+			site.getPage().addPartListener(mapEditorListener);
 		} catch (CoreException e) {
-			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		setPartName(input.getName());
@@ -192,10 +417,28 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 		firePropertyChange(IEditorPart.PROP_TITLE);
 	}
 
+	protected void setBasePathFrom(File file) {
+		if (file.getParent() != null)
+			basePath = file.getParent();
+	}
+
+	protected void loadMapFromPath(IPath path) throws Exception {
+		System.out.println(path.toOSString());
+		currentMap = new TMXMapReader().readMap(
+				new ByteArrayInputStream(document.get().getBytes()),
+				path.toFile());
+	}
+
+	protected void registerGlobalActionHandlers(IActionBars actionBars) {
+		actionBars.setGlobalActionHandler(ActionFactory.UNDO.getId(), undoAction);
+		actionBars.setGlobalActionHandler(ActionFactory.REDO.getId(), redoAction);
+		actionBars.setGlobalActionHandler(ActionFactory.COPY.getId(), copyAction);
+		actionBars.setGlobalActionHandler(ActionFactory.PASTE.getId(), pasteAction);
+	}
+
 	@Override
 	public boolean isDirty() {
-		// TODO Auto-generated method stub
-		return false;
+		return dirty;
 	}
 
 	@Override
@@ -206,6 +449,7 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 
 	@Override
 	public void createPartControl(Composite parent) {
+		init = true;
 		Composite composite = new Composite(parent, SWT.NONE);
 		composite.setLayout(new FillLayout());
 		mapScrollView = new ScrolledComposite(composite, SWT.H_SCROLL
@@ -224,19 +468,43 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 		ShapeBrush sb = new ShapeBrush();
 		sb.makeQuadBrush(new Rectangle(0, 0, 1, 1));
 		setBrush(sb);
-		// Set the minimum size
-		// scrolledComposite.setMinSize(400, 400);
-
-		// Expand both horizontally and vertically
-		// scrolledComposite.setExpandHorizontal(true);
-		// scrolledComposite.setExpandVertical(true);
 		setCurrentMap(currentMap);
+		init = false;
+		
+		Display.getDefault().asyncExec(new Runnable() {
+			
+			@Override
+			public void run() {
+				IWorkbenchWindow workbenchWindow = getSite().getPage().getWorkbenchWindow();
+				try {
+					PlatformUI.getWorkbench().showPerspective(MapperPerspective.ID,workbenchWindow);
+				} catch (WorkbenchException e) {
+					// Shouldn't happen
+					MapperPlugin.log(e);
+					e.printStackTrace();
+				}
+			}
+		});
+		initUIComponents();
+	}
+
+	protected void initUIComponents() {
+		draggers.add(new ObjectResizeDragger(this,mapView));
+		draggers.add(new ObjectSelectionDragger(this));
+		
+		if (initMemento != null) {
+			initEditorState(initMemento);
+		}
 	}
 
 	@Override
 	public void setFocus() {
-		// TODO Auto-generated method stub
-
+		mapView.setFocus();
+		IActionBars actionBars = getEditorSite().getActionBars();
+		
+		if (actionBars.getGlobalActionHandler(ActionFactory.UNDO.getId()) != undoAction) {
+			registerGlobalActionHandlers(actionBars);
+		}
 	}
 
 	public Map getMap() {
@@ -247,6 +515,10 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 		// Make sure a possible current highlight gets erased from screen
 		if (mapView != null && prefs.getBoolean("cursorhighlight", true)) {
 			Rectangle redraw = cursorHighlight.getBounds();
+			redraw.x *= currentMap.getTileWidth();
+			redraw.width *= currentMap.getTileWidth();
+			redraw.y *= currentMap.getTileHeight();
+			redraw.height *= currentMap.getTileHeight();
 			mapView.repaintRegion(redraw);
 		}
 
@@ -256,6 +528,8 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 		Rectangle brushRedraw = currentBrush.getBounds();
 		cursorHighlight.resize(brushRedraw.width, brushRedraw.height, 0, 0);
 		cursorHighlight.selectRegion(currentBrush.getShape());
+		MapLayer layer = currentBrush.getLayer(0);
+		cursorHighlight.copyTileData(layer);
 		if (mapView != null) {
 			mapView.setBrush(currentBrush);
 		}
@@ -296,19 +570,6 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 		cursorHighlight.setSelTile(currentTile);
 	}
 
-	// private ColorManager colorManager;
-	//
-	// public MapEditor() {
-	// super();
-	// colorManager = new ColorManager();
-	// setSourceViewerConfiguration(new XMLConfiguration(colorManager));
-	// setDocumentProvider(new XMLDocumentProvider());
-	// }
-	// public void dispose() {
-	// colorManager.dispose();
-	// super.dispose();
-	// }
-
 	public void mousePressed(MouseEvent e) {
 		Point tile = mapView.screenToTileCoords(e.x, e.y);
 		mouseButton = e.button;
@@ -324,6 +585,15 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 			// Remember screen location for scrolling with middle mouse button
 			mouseInitialScreenLocation = new Point(e.x, e.y);
 		} else if (mouseButton == 1) {
+			for (IDragger dragger: draggers) {
+				if (dragger.canStartDrag(e)) {
+					dragger.handleDragStart(e);
+					currentDragger = dragger;
+					bMouseIsDragging = true;
+					return;
+				}
+			} 
+			
 			switch (currentPointerState) {
 			case PS_PAINT:
 				if (layer instanceof TileLayer) {
@@ -332,8 +602,8 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 				}
 			case PS_ERASE:
 			case PS_POUR:
-				// paintEdit = new MapLayerEdit(layer, createLayerCopy(layer),
-				// null);
+				 paintEdit = new MapLayerEdit(layer, createLayerCopy(layer),
+				 null);
 				break;
 			default:
 			}
@@ -347,17 +617,17 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 				contains = true;
 			}
 			if (marqueeSelection == null && !contains) {
-				marqueeSelection = new SelectionLayer(currentMap.getWidth(),
-						currentMap.getHeight());
+				setMarqueeSelection(new SelectionLayer(currentMap.getWidth(),
+						currentMap.getHeight()));
 				currentMap.addLayerSpecial(marqueeSelection);
 			} else if (marqueeSelection != null
 					&& (e.stateMask & SWT.BUTTON1) > 0) {
 				currentMap.removeLayerSpecial(marqueeSelection);
 				if (contains) {
-					marqueeSelection = null;
+					setMarqueeSelection(null);
 				} else {
-					marqueeSelection = new SelectionLayer(
-							currentMap.getWidth(), currentMap.getHeight());
+					setMarqueeSelection(new SelectionLayer(
+							currentMap.getWidth(), currentMap.getHeight()));
 					currentMap.addLayerSpecial(marqueeSelection);
 				}
 			}
@@ -373,6 +643,17 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 	public void mouseReleased(MouseEvent event) {
 		final MapLayer layer = getCurrentLayer();
 		final Point limp = mouseInitialPressLocation;
+		
+		if (event.button == 1 && currentDragger != null) {
+			currentDragger.handleDragFinish(event);
+			currentDragger = null;
+
+			mouseButton = SWT.DEFAULT;
+			bMouseIsDown = false;
+			bMouseIsDragging = false;
+			mapView.redraw();
+			return;
+		}
 
 		if (currentPointerState == PS_MARQUEE) {
 			// Uncommented to allow single tile selections
@@ -389,18 +670,21 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 			// tileInstancePropertiesDialog.setSelection(marqueeSelection);
 			// }
 		} else if (currentPointerState == PS_MOVE) {
-			if (layer != null && (moveDist.x != 0 || moveDist.x != 0)) {
-				// undoSupport.postEdit(new MoveLayerEdit(layer, moveDist));
+			if (layer != null && (moveDist.x != 0 || moveDist.y != 0)) {
+				 addEdit(new MoveLayerEdit(layer, moveDist));
 			}
 		} else if (currentPointerState == PS_PAINT) {
 			if (layer instanceof TileLayer) {
 				currentBrush.endPaint();
 			}
 		} else if (currentPointerState == PS_MOVEOBJ) {
-			if (layer instanceof ObjectGroup && currentObject != null
-					&& (moveDist.x != 0 || moveDist.x != 0)) {
-				// undoSupport.postEdit(
-				// new MoveObjectEdit(currentObject, moveDist));
+			if (initialObjectLocation != null && currentObject != null) {
+				Point translation = new Point(currentObject.getX() - initialObjectLocation.x, currentObject.getY() - initialObjectLocation.y);
+				if (layer instanceof ObjectGroup && currentObject != null
+						&& (translation.x != 0 || translation.y != 0)) {
+					 addEdit(new MoveObjectsEdit(currentObject, translation));
+					 initialObjectLocation = null;
+				}
 			}
 		}
 
@@ -423,10 +707,9 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 
 				// Do a quick check to make sure the selection is not empty
 				if (brushLayer.isEmpty()) {
-					JOptionPane.showMessageDialog(null,
-							Resources.getString("dialog.selection.empty"),
-							Resources.getString("dialog.selection.empty"),
-							JOptionPane.WARNING_MESSAGE);
+					MessageDialog.openInformation(getSite().getShell(),
+					Resources.getString("dialog.selection.empty"),
+					Resources.getString("dialog.selection.empty"));
 				} else {
 					setBrush(new CustomBrush(brushLayer));
 					cursorHighlight.setOffset(tile.x - (int) bounds.width / 2,
@@ -443,7 +726,7 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 				 * Point pos = mapView.screenToPixelCoords( event.x, event.y);
 				 */
 				ObjectGroup group = (ObjectGroup) layer;
-				// undoSupport.postEdit(new AddObjectEdit(group, object));
+				 addEdit(new AddObjectsEdit(group, object));
 				group.addObject(object);
 				mapView.redraw();
 			}
@@ -451,28 +734,42 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 			// get rid of any visible marquee
 			if (marqueeSelection != null) {
 				currentMap.removeLayerSpecial(marqueeSelection);
-				marqueeSelection = null;
+				setMarqueeSelection(null);
 			}
 		}
 
-		// if (paintEdit != null) {
-		// if (layer != null) {
-		// try {
-		// MapLayer endLayer = paintEdit.getStart().createDiff(layer);
-		// paintEdit.end(endLayer);
-		// undoSupport.postEdit(paintEdit);
-		// } catch (Exception e) {
-		// e.printStackTrace();
-		// }
-		// }
-		// paintEdit = null;
-		// }
+		if (paintEdit != null) {
+			if (layer != null) {
+				try {
+					MapLayer endLayer = paintEdit.getStart().createDiff(layer);
+					paintEdit.end(endLayer);
+					addEdit(paintEdit);
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+			paintEdit = null;
+		}
 
+		if (initialObjectLocation != null && currentObject != null) {
+			currentObject.setLocation(initialObjectLocation);
+		}
+		initialObjectLocation = null; 
 		currentObject = null;
 
 		mouseButton = SWT.DEFAULT;
 		bMouseIsDown = false;
 		bMouseIsDragging = false;
+	}
+	
+	/* (non-Javadoc)
+	 * @see com.onpositive.mapper.editors.ILocalUndoSupport#addEdit(org.eclipse.core.commands.operations.AbstractOperation)
+	 */
+	@Override
+	public void addEdit(AbstractOperation operation) {
+		operation.addContext(undoContext);
+		operationHistory.add(operation);
+		setDirty(true);
 	}
 
 	/**
@@ -506,8 +803,8 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 					// In case we are dragging to create a custom brush, let
 					// the user know where we are creating it from
 					if (marqueeSelection == null) {
-						marqueeSelection = new SelectionLayer(
-								currentMap.getWidth(), currentMap.getHeight());
+						setMarqueeSelection(new SelectionLayer(
+								currentMap.getWidth(), currentMap.getHeight()));
 						currentMap.addLayerSpecial(marqueeSelection);
 					}
 
@@ -536,9 +833,12 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 				MapObject obj = group.getObjectNear(pos.x, pos.y,
 						mapView.getZoom());
 				if (obj != null) {
-					// ObjectDialog od = new ObjectDialog(appFrame, obj,
-					// undoSupport);
-					// od.getProps();
+					int tileWidth = mapView.getMap().getTileWidth();
+					int tileHeight = mapView.getMap().getTileHeight();
+					ObjectPropertyDialog dialog = new ObjectPropertyDialog(
+							getSite().getShell(), obj, this, tileWidth, tileHeight);
+					dialog.open();
+					mapView.redraw();
 				}
 			}
 		} else if (mouseButton == 2
@@ -568,25 +868,26 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 		} else if (mouseButton == 1) {
 			switch (currentPointerState) {
 			case PS_PAINT:
-				// paintEdit.setPresentationName(TOOL_PAINT); //TODO undo
-				if (layer instanceof TileLayer) {
+				 paintEdit.setPresentationName(TOOL_PAINT); 
+				if (layer instanceof TileLayer && canPaint(currentBrush)) {
 					try {
 						mapView.repaintRegion(currentBrush.doPaint(tile.x,
 								tile.y));
+						currentMap.fireMapChanged();
 					} catch (Exception e) {
 						e.printStackTrace();
 					}
 				}
 				break;
 			case PS_ERASE:
-				// paintEdit.setPresentationName(TOOL_ERASE);
+				 paintEdit.setPresentationName(TOOL_ERASE);
 				if (layer instanceof TileLayer) {
 					((TileLayer) layer).setTileAt(tile.x, tile.y, null);
 					mapView.repaintRegion(new Rectangle(tile.x, tile.y, 1, 1));
 				}
 				break;
 			case PS_POUR:
-				// paintEdit = null;
+				 paintEdit = null;
 				if (layer instanceof TileLayer) {
 					TileLayer tileLayer = (TileLayer) layer;
 					Tile oldTile = tileLayer.getTileAt(tile.x, tile.y);
@@ -606,6 +907,7 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 						tile.y - mousePressLocation.y);
 
 				layer.translate(translation.x, translation.y);
+				mousePressLocation = tile;
 				moveDist.x += translation.x;
 				moveDist.y += translation.y;
 				mapView.redraw();
@@ -645,8 +947,8 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 			case PS_ADDOBJ:
 				if (layer instanceof ObjectGroup) {
 					if (marqueeSelection == null) {
-						marqueeSelection = new SelectionLayer(
-								currentMap.getWidth(), currentMap.getHeight());
+						setMarqueeSelection(new SelectionLayer(
+								currentMap.getWidth(), currentMap.getHeight()));
 						currentMap.addLayerSpecial(marqueeSelection);
 					}
 
@@ -675,7 +977,7 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 					MapObject obj = group.getObjectNear(pos.x, pos.y,
 							mapView.getZoom());
 					if (obj != null) {
-						// undoSupport.postEdit(new RemoveObjectEdit(group,
+						// addEdit(new RemoveObjectEdit(group,
 						// obj));
 						group.removeObject(obj);
 						// TODO: repaint only affected area
@@ -694,21 +996,33 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 							break;
 						}
 						mouseLastPixelLocation = pos;
+						initialObjectLocation = new Point(currentObject.getX(), currentObject.getY());
 						moveDist = new Point(0, 0);
 						break;
 					}
 					Point translation = new Point(pos.x
 							- mouseLastPixelLocation.x, pos.y
 							- mouseLastPixelLocation.y);
-					currentObject.translate(translation.x, translation.y);
-					moveDist.x += translation.x;
-					moveDist.y += translation.y;
-					mouseLastPixelLocation = pos;
+					
+					if (snapToGrid) {
+						Point tileCoords = mapView.getSnappedVector(pos);
+						currentObject.setX(tileCoords.x);
+						currentObject.setY(tileCoords.y);
+					} else {
+						currentObject.setX(initialObjectLocation.x + translation.x);
+						currentObject.setY(initialObjectLocation.y + translation.y);
+					}
 					mapView.redraw();
 				}
 				break;
 			}
 		}
+	}
+	
+	protected boolean canPaint(AbstractBrush brush) {
+		if (brush  instanceof ShapeBrush && ((ShapeBrush) brush).getTile() == null)
+			return false;
+		return true;
 	}
 
 	private void pour(TileLayer layer, int x, int y, Tile newTile, Tile oldTile) {
@@ -766,19 +1080,27 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 		after = new TileLayer(bounds);
 		after.copyFrom(layer);
 
-		// MapLayerEdit mle = new MapLayerEdit(layer, before, after); //TODO
-		// undo
-		// mle.setPresentationName(TOOL_FILL);
-		// undoSupport.postEdit(mle);
+		 MapLayerEdit mle = new MapLayerEdit(layer, before, after); 
+		 mle.setPresentationName(TOOL_FILL);
+		 addEdit(mle);
 	}
 
 	public void mouseMoved(MouseEvent e) {
 		// Update state of mouse buttons
 		bMouseIsDown = e.button > 0;
 		if (bMouseIsDragging) { // Was bMouseIsDown
-			doMouse(e);
+			if (currentDragger != null) {
+				currentDragger.handleDrag(e);
+				mapView.redraw();
+			} else
+				doMouse(e);
+		} else {
+			for (IDragger dragger : draggers) {
+				dragger.handleMove(e);
+			}
 		}
-
+//		if (bMouseIsDown)
+//			mousePressLocation = mapView.screenToTileCoords(e.x, e.y);
 		Point tile = mapView.screenToTileCoords(e.x, e.y);
 		updateTileCoordsLabel(tile);
 		updateCursorHighlight(tile);
@@ -831,10 +1153,16 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 						layer.setOffset(brushRedraw.x, brushRedraw.y);
 					}
 				}
-				mapView.repaintRegion(redraw);
+				if (currentBrush instanceof ITileBrush && ((ITileBrush) currentBrush).getTile() != null)
+					mapView.repaintRegion(redraw, ((ITileBrush) currentBrush).getTile().getSize());
+				else
+					mapView.repaintRegion(redraw);
 				cursorHighlight.setOffset(brushRedraw.x, brushRedraw.y);
 				// cursorHighlight.selectRegion(currentBrush.getShape());
-				mapView.repaintRegion(brushRedraw);
+				if (currentBrush instanceof ITileBrush && ((ITileBrush) currentBrush).getTile() != null)
+					mapView.repaintRegion(brushRedraw, ((ITileBrush) currentBrush).getTile().getSize());
+				else
+					mapView.repaintRegion(brushRedraw);
 			}
 		}
 	}
@@ -847,7 +1175,7 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 		marqueeSelection = null;
 
 		currentMap = newMap;
-		boolean mapLoaded = currentMap != null;
+//		boolean mapLoaded = currentMap != null;
 
 		// Create a default brush (protect against a bug with custom brushes)
 		ShapeBrush sb = new ShapeBrush();
@@ -881,15 +1209,20 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 				 * paintEdit.getStart().createDiff(layer); if (endLayer != null)
 				 * { endLayer.setId(layer.getId());
 				 * endLayer.setOffset(layer.getBounds().x,layer.getBounds().y);
-				 * } paintEdit.end(endLayer); undoSupport.postEdit(paintEdit); }
+				 * } paintEdit.end(endLayer); addEdit(paintEdit); }
 				 * catch (Exception e) { e.printStackTrace(); } }
 				 */
 				int oldCurLayer = currentLayer;
 				currentLayer = index;
 				firePartPropertyChanged(CURRENT_LAYER_PROP, "" + oldCurLayer,
 						"" + currentLayer);
-				// layerTable.changeSelection(totalLayers - currentLayer - 1, 0,
-				// false, false);
+				mapView.setCurrentLayer(currentLayer);
+				if (!isValidNewState(getCurrentPointerState())) {
+					if (currentMap.getLayer(index) instanceof ObjectGroup)
+						setCurrentPointerState(PS_MOVEOBJ);
+					else
+						setCurrentPointerState(PS_PAINT);
+				}
 			}
 		}
 	}
@@ -903,7 +1236,7 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 		return currentLayer;
 	}
 	
-    private void setCurrentPointerState(int state) {
+    public void setCurrentPointerState(int state) {
         /*
         if (currentPointerState == PS_MARQUEE && state != PS_MARQUEE) {
             // Special logic for selection
@@ -913,45 +1246,29 @@ public class MapEditor extends EditorPart implements MapChangeListener {
             }
         }
         */
+    	if (currentPointerState == state || !isValidNewState(state))
+    		return;
 
-        currentPointerState = state;
-
-        // Select the matching button  //TODO
-//        paintButton.setSelected(state == PS_PAINT);
-//        eraseButton.setSelected(state == PS_ERASE);
-//        pourButton.setSelected(state == PS_POUR);
-//        eyedButton.setSelected(state == PS_EYED);
-//        marqueeButton.setSelected(state == PS_MARQUEE);
-//        moveButton.setSelected(state == PS_MOVE);
-//        objectAddButton.setSelected(state == PS_ADDOBJ);
-//        objectRemoveButton.setSelected(state == PS_REMOVEOBJ);
-//        objectMoveButton.setSelected(state == PS_MOVEOBJ);
-
-        // Set the matching cursor //TODO
-//        if (mapView != null) {
-//            switch (currentPointerState) {
-//                case PS_PAINT:
-//                case PS_ERASE:
-//                case PS_POINT:
-//                case PS_POUR:
-//                case PS_MARQUEE:
-//                    mapView.setCursor(curDefault);
-//                    break;
-//                case PS_EYED:
-//                    mapView.setCursor(curEyed);
-//                    break;
-//            }
-//        }
+    	int oldState = currentPointerState;
+    	currentPointerState = state;
+        mapView.setCurrentPointerState(state);
+        if (needBrushReset(state))
+        	resetBrush();
+        firePartPropertyChanged(POINTER_STATE_PROP,"" + oldState,"" + currentPointerState);
+        mapView.redraw();
     }
     
-    private void updateLayerInfo() {
+    protected boolean needBrushReset(int state) {
+		return state != PS_PAINT;
+	}
+
+	private void updateLayerInfo() {
         int cl = currentLayer;
       
         if (currentMap != null) {
             if (currentMap.getTotalLayers() > 0 && cl == -1) {
                 cl = 0;
             }
-
             setCurrentLayer(cl);
         }
 
@@ -960,7 +1277,7 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 	@Override
 	public void tilesetsSwapped(MapChangedEvent e, int index0,
 			int index1) {
-		// TODO Auto-generated method stub
+		// TODO Not supported yet
 	}
 
 	@Override
@@ -970,13 +1287,274 @@ public class MapEditor extends EditorPart implements MapChangeListener {
 
 	@Override
 	public void tilesetAdded(MapChangedEvent e, TileSet tileset) {
-		// TODO Auto-generated method stub
+		// TODO Not supported yet
 	}
 
 	@Override
 	public void mapChanged(MapChangedEvent e) {
 		updateLayerInfo();
 		mapView.redraw();
+		if (!init)
+			setDirty(true);
 	}
 
+	private void setDirty(boolean dirty) {
+		this.dirty = dirty;
+		firePropertyChange(PROP_DIRTY);
+	}
+
+	public int getCurrentPointerState() {
+		return currentPointerState;
+	}
+	
+	@Override
+	public void dispose() {
+		super.dispose();
+		if (editorUndoListener != null) {
+			operationHistory.removeOperationHistoryListener(editorUndoListener);
+		}
+		undoAction.dispose();
+		redoAction.dispose();
+	}
+
+	private boolean isValidNewState(int state) {
+		if (isObjectLayerActive() && (state == PS_PAINT || state == PS_MOVE || state == PS_ERASE))
+			return false;
+		if (!isObjectLayerActive() && (state == PS_ADDOBJ || state == PS_MOVEOBJ || state == PS_REMOVEOBJ || state == PS_RESIZEOBJ))
+			return false;
+		return true;
+	}
+
+	public boolean isObjectLayerActive() {
+		return getCurrentLayer() instanceof ObjectGroup;
+	}
+
+	public void copySelection() {
+		if (currentMap != null) {
+			if (marqueeSelection != null && getCurrentLayer() instanceof TileLayer) {
+	            if (getCurrentLayer() instanceof TileLayer) {
+	                clipboardLayer = new TileLayer(
+	                        marqueeSelection.getSelectedAreaBounds());
+	            } 
+//	            else if (getCurrentLayer() instanceof ObjectGroup) {
+//	                clipboardLayer = new ObjectGroup(
+//	                        marqueeSelection.getSelectedAreaBounds());
+//	            }
+	            clipboardLayer.maskedCopyFrom(
+	                    getCurrentLayer(),
+	                    marqueeSelection.getSelectedArea());
+	            firePartPropertyChanged(CLIPBOARD_CONTENT_PROP,"","");
+	        } else if (getCurrentLayer() instanceof ObjectGroup) {
+	        	ObjectSelectionLayer selLayer = getObjectSelectionLayer();
+	        	if (selLayer != null)
+	        		clipboardLayer = selLayer;
+	        	firePartPropertyChanged(CLIPBOARD_CONTENT_PROP,"","");
+	        }
+		}
+		
+	}
+	
+	public void copyAll() {
+		//FIXME: only works for TileLayers
+        if (currentMap != null && marqueeSelection != null) {
+            clipboardLayer = new TileLayer(
+                    marqueeSelection.getSelectedAreaBounds());
+            ListIterator<?> itr = currentMap.getLayers();
+            while(itr.hasNext()) {
+                MapLayer layer = (MapLayer) itr.next();
+                if (layer instanceof TileLayer) {
+                    clipboardLayer.maskedMergeOnto(
+                            layer,
+                            marqueeSelection.getSelectedArea());
+                }
+            }
+        }
+	}
+	
+	public void paste() {
+		if (clipboardLayer instanceof TileLayer) {
+			setBrush(new CustomBrush((TileLayer)clipboardLayer));
+			setCurrentPointerState(PS_PAINT);
+		} else if (clipboardLayer instanceof ObjectSelectionLayer && getCurrentLayer() instanceof ObjectGroup) {
+			Display display = Display.getDefault();
+			Point cursorLocation = null;
+			if (display.getCursorControl() == mapView) {
+				cursorLocation = display.getCursorLocation();
+				cursorLocation = display.map(null, mapView, cursorLocation);
+			}
+			if (isSnapToGrid()) {
+				cursorLocation = getSnappedVector(cursorLocation);
+			}
+			Rectangle selectionBounds = ((ObjectSelectionLayer) clipboardLayer).getPixelBounds();
+			if (cursorLocation == null) {
+				cursorLocation = new Point(selectionBounds.x + selectionBounds.width, selectionBounds.y);
+				int mapPixelWidth = currentMap.getWidth() * currentMap.getTileWidth();
+				if (cursorLocation.x + selectionBounds.width > mapPixelWidth)
+					cursorLocation.x = mapPixelWidth - selectionBounds.width;
+			}
+			Iterator<MapObject> objects = ((ObjectSelectionLayer) clipboardLayer).getObjects();
+			addObjects(cursorLocation, selectionBounds, objects);
+		}
+	}
+
+	protected void addObjects(Point cursorLocation, Rectangle selectionBounds,
+			Iterator<MapObject> objects) {
+		try {
+			List <MapObject> resultObjects = new ArrayList<MapObject>();
+			for (;objects.hasNext();) {
+				MapObject next = objects.next();
+				MapObject clone = next.clone();
+				Rectangle initialBounds = clone.getBounds();
+				clone.setBounds(initialBounds.x - selectionBounds.x + cursorLocation.x,
+								initialBounds.y - selectionBounds.y + cursorLocation.y,
+								initialBounds.width,
+								initialBounds.height);
+				resultObjects.add(clone);
+			}
+			AddObjectsEdit edit = new AddObjectsEdit((ObjectGroup) getCurrentLayer(),resultObjects.toArray(new MapObject[0]));
+			edit.execute(null,null);
+			addEdit(edit);
+			mapView.redraw();
+		} catch (CloneNotSupportedException e) {
+			// Shouldn't happen
+			e.printStackTrace();
+		} catch (ExecutionException e) {
+			// Shouldn't happen
+			e.printStackTrace();
+		}
+	}
+	
+	protected void setMarqueeSelection(SelectionLayer marqueeSelection) {
+		this.marqueeSelection = marqueeSelection;
+		firePartPropertyChanged(MARQEE_SELECTION_PROP,"","");
+	}
+
+	public boolean hasSelection() {
+		return marqueeSelection != null || hasObjectSelection();
+	}
+	
+	protected boolean hasObjectSelection() {
+		return getCurrentLayer() instanceof ObjectGroup && getObjectSelectionLayer() != null;
+	}
+	
+	protected ObjectSelectionLayer getObjectSelectionLayer() {
+		Iterator<MapLayer> layers = currentMap.getLayersSpecial();
+		for (; layers.hasNext();) {
+			MapLayer next = layers.next();
+			if (next instanceof ObjectSelectionLayer) {
+				return (ObjectSelectionLayer) next;
+			}
+		}
+		return null;
+	}
+
+	public boolean hasClipboardData() {
+		return clipboardLayer != null;
+	}
+	
+	public void setShowGrid(boolean showGrid) {
+		mapView.setShowGrid(showGrid);
+		mapView.redraw();
+	}
+
+	public void setHighlightCurrentLayer(boolean hightlight) {
+		mapView.setHighlightSelectedLayer(hightlight);
+		mapView.redraw();
+	}
+
+	public void selectNextLayer() {
+		if (currentMap.getTotalLayers() < 2)
+			return;
+		if (currentLayer == 0) 
+			setCurrentLayer(currentMap.getTotalLayers() - 1);
+		else
+			setCurrentLayer(currentLayer - 1);
+	}
+	
+	public void selectPrevLayer() {
+		if (currentMap.getTotalLayers() < 2)
+			return;
+		if (currentLayer == currentMap.getTotalLayers() - 1) 
+			setCurrentLayer(0);
+		else
+			setCurrentLayer(currentLayer + 1);
+	}
+
+	public boolean isSnapToGrid() {
+		return snapToGrid;
+	}
+
+	public void setSnapToGrid(boolean snapToGrid) {
+		this.snapToGrid = snapToGrid;
+	}
+
+	public String getBasePath() {
+		return basePath;
+	}
+
+	@Override
+	public void saveState(IMemento memento) {
+		memento.putInteger(CURRENT_LAYER_PROP, getCurrentLayerIndex());
+		memento.putInteger(POINTER_STATE_PROP, getCurrentPointerState());
+		memento.putBoolean(SHOW_GRID_PROP,mapView.isShowGrid());
+		memento.putBoolean(HIGHLIGHT_CURRENT_LAYER_PROP,mapView.isHighlightSelectedLayer());
+		memento.putBoolean(SNAP_TO_GRID_PROP,isSnapToGrid());
+	}
+
+	@Override
+	public void restoreState(IMemento memento) {
+		if (memento != null) {
+			initMemento = memento;
+		}
+	}
+
+	protected void initEditorState(IMemento memento) {
+		Integer curLayer = memento.getInteger(CURRENT_LAYER_PROP);
+		if (curLayer != null && curLayer < currentMap.getTotalLayers()) {
+			setCurrentLayer(curLayer);
+		}
+		Integer curPointerState = memento.getInteger(POINTER_STATE_PROP);
+		if (curPointerState != null && isValidNewState(curPointerState)) {
+			setCurrentPointerState(curPointerState);
+		}
+		Boolean highlightCurrent = memento.getBoolean(HIGHLIGHT_CURRENT_LAYER_PROP);
+		if (highlightCurrent != null)
+			mapView.setHighlightSelectedLayer(highlightCurrent);
+		Boolean showGrid = memento.getBoolean(SHOW_GRID_PROP);
+		if (showGrid != null)
+			mapView.setShowGrid(showGrid);
+		Boolean snapToGrid = memento.getBoolean(SNAP_TO_GRID_PROP);
+		if (snapToGrid != null)
+			setSnapToGrid(snapToGrid);
+
+	}
+
+	public boolean isShowGrid() {
+		return mapView.isShowGrid();
+	}
+
+	public boolean isHighlightCurrentLayer() {
+		return mapView.isHighlightSelectedLayer();
+	}
+
+	public Point getSnappedVector(Point vector) {
+		return mapView.getSnappedVector(vector);
+	}
+
+	public int getSnappedScalarX(int scalar) {
+		return mapView.getSnappedScalarX(scalar);
+	}
+
+	public int getSnappedScalarY(int scalar) {
+		return mapView.getSnappedScalarY(scalar);
+	}
+
+	public void fireObjectSelectionChanged() {
+		firePartPropertyChanged(OBJECT_SELECTION_PROP,"","");
+	}
+
+	public IUndoContext getUndoContext() {
+		return undoContext;
+	}
+	
 }

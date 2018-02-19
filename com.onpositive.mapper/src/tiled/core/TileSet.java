@@ -1,24 +1,32 @@
 /*
- *  Tiled Map Editor, (c) 2004-2006
+ * Copyright 2004-2010, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
+ * Copyright 2004-2006, Adam Turk <aturk@biggeruniverse.com>
  *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
+ * This file is part of libtiled-java.
  *
- *  Adam Turk <aturk@biggeruniverse.com>
- *  Bjorn Lindeijer <bjorn@lindeijer.nl>
+ * This library is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation; either version 2.1 of the License, or (at
+ * your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ * or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public
+ * License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library;  If not, see <http://www.gnu.org/licenses/>.
  */
 
 package tiled.core;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.*;
-import javax.imageio.ImageIO;
 
+import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.swt.SWT;
-import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.graphics.ImageData;
@@ -27,10 +35,9 @@ import org.eclipse.swt.graphics.RGB;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Display;
 
-import tiled.mapeditor.util.TransparentImageFilter;
 import tiled.mapeditor.util.cutter.BasicTileCutter;
 import tiled.mapeditor.util.cutter.TileCutter;
-import tiled.util.NumberedSet;
+
 
 /**
  * todo: Update documentation
@@ -42,10 +49,10 @@ import tiled.util.NumberedSet;
  *
  * <p>The other is the tile image.</p>
  */
-public class TileSet
+public class TileSet implements Iterable<Tile>
 {
     private String base;
-    private NumberedSet tiles, images;
+    final private Vector<Tile> tiles = new Vector<Tile>();
     private int firstGid;
     private long tilebmpFileLastModified;
     private TileCutter tileCutter;
@@ -57,21 +64,16 @@ public class TileSet
     private File tilebmpFile;
     private String name;
     private RGB transparentColor;
-   // private RGB transparentColor = new RGB(255,255,255);
-    private Properties defaultTileProperties;
     private Image tileSetImage;
+    
     private LinkedList<TilesetChangeListener> tilesetChangeListeners;
-    private HashMap<Image,Image> transparentImageCache = new HashMap();
 
     /**
      * Default constructor
      */
     public TileSet() {
-        tiles = new NumberedSet();
-        images = new NumberedSet();
         tileDimensions = new Rectangle(0,0,0,0);
-        defaultTileProperties = new Properties();
-        tilesetChangeListeners = new LinkedList();
+        tilesetChangeListeners = new LinkedList<TilesetChangeListener>();
     }
 
     /**
@@ -87,34 +89,41 @@ public class TileSet
     {
     	this.tileCutter = cutter;
         setTilesetImageFilename(imgFilename);
-
-        ImageData imageData = new ImageData(imgFilename);
-        if (transparentColor != null) {
-//        	imageData.transparentPixel = imageData.palette.getPixel(transparentColor);
-        }
-        Image image =  new Image(Display.getDefault(), imageData);
+        Image image;
+        if (!new File(imgFilename).exists())
+        	MessageDialog.openError(Display.getDefault().getActiveShell(), "Error reading map", "Can't unmarshal tileset " + imgFilename + ". File not found.");
+        try {
+	        ImageData imageData = new ImageData(imgFilename);
+	        if (transparentColor != null) {
+//	        	imageData.transparentPixel = imageData.palette.getPixel(transparentColor);
+	        }
+	        image =  new Image(Display.getDefault(), imageData);
+        } catch (Exception e) {
+        	image = new Image(Display.getDefault(), new Rectangle(0,0,16,16));
+		}
                
         Image buffered = new Image(Display.getDefault(),image,SWT.IMAGE_COPY);
-
+        cutter.setTransparentColor(transparentColor);
         importTileBitmap(buffered, cutter);
+        cutter.setTransparentColor(null);
     }
 
     /**
      * Creates a tileset from a buffered image. Tiles are cut by the passed
      * cutter.
      *
-     * @param tilebmp     the image to be used, must not be null
+     * @param tileBitmap  the image to be used, must not be null
      * @param cutter      the tile cutter, must not be null
      */
-    private void importTileBitmap(Image tilebmp, TileCutter cutter)
+    private void importTileBitmap(Image tileBitmap, TileCutter cutter)
     {
-        assert tilebmp != null;
+        assert tileBitmap != null;
         assert cutter != null;
 
         tileCutter = cutter;
-        tileSetImage = tilebmp;
+        tileSetImage = tileBitmap;
 
-        cutter.setImage(tilebmp);
+        cutter.setImage(tileBitmap);
 
         Point size = cutter.getTileDimensions();
 		tileDimensions = new Rectangle(0,0,size.x,size.y);
@@ -125,12 +134,12 @@ public class TileSet
             tilesPerRow = basicTileCutter.getTilesPerRow();
         }
 
-        Image tile = cutter.getNextTile();
-        while (tile != null) {
-            Tile newTile = new Tile();
-            newTile.setImage(addImage(tile));
-            addNewTile(newTile);
-            tile = cutter.getNextTile();
+        Image tileImage = cutter.getNextTile();
+        while (tileImage != null) {
+            Tile tile = new Tile();
+            tile.setImage(tileImage);
+            addNewTile(tile);
+            tileImage = cutter.getNextTile();
         }
     }
 
@@ -143,51 +152,46 @@ public class TileSet
     private void refreshImportedTileBitmap()
             throws IOException
     {
-        String imgFilename = tilebmpFile.getPath();
+    	 String imgFilename = tilebmpFile.getPath();
 
-        ImageData data = new ImageData(imgFilename);
-        if (transparentColor != null) {
-        	data.transparentPixel = transparentColor.red << 16 + transparentColor.green << 8 + transparentColor.blue;
-        }
-		Image image = new Image(Display.getDefault(), data);
-        if (image == null) {
-            throw new IOException("Failed to load " + tilebmpFile);
-        }
+         ImageData data = new ImageData(imgFilename);
+         if (transparentColor != null) {
+         	data.transparentPixel = transparentColor.red << 16 + transparentColor.green << 8 + transparentColor.blue;
+         }
+ 		Image image = new Image(Display.getDefault(), data);
+         Rectangle origBounds = image.getBounds();
+        Image buffered = new Image(Display.getDefault(),origBounds.width,origBounds.height);
+        GC gc = new GC(buffered);
+        gc.drawImage(image,0,0);
+        gc.dispose();
 
-       Rectangle origBounds = image.getBounds();
-       Image buffered = new Image(Display.getDefault(),origBounds.width,origBounds.height);
-       GC gc = new GC(buffered);
-       gc.drawImage(image,0,0);
-       gc.dispose();
-       refreshImportedTileBitmap(buffered);
+        refreshImportedTileBitmap(buffered);
     }
 
     /**
      * Refreshes a tileset from a buffered image. Tiles are cut by the passed
      * cutter.
      *
-     * @param tilebmp the image to be used, must not be null
+     * @param tileBitmap the image to be used, must not be null
      */
-    private void refreshImportedTileBitmap(Image tilebmp) {
-        assert tilebmp != null;
+    private void refreshImportedTileBitmap(Image tileBitmap) {
+        assert tileBitmap != null;
 
         tileCutter.reset();
-        tileCutter.setImage(tilebmp);
+        tileCutter.setImage(tileBitmap);
 
-        tileSetImage = tilebmp;
+        tileSetImage = tileBitmap;
         Point size = tileCutter.getTileDimensions();
 		tileDimensions = new Rectangle(0,0,size.x,size.y);
 
         int id = 0;
-        Image tile = tileCutter.getNextTile();
-        while (tile != null) {
-            int imgId = getTile(id).tileImageId;
-            overlayImage(imgId, tile);
-            tile = tileCutter.getNextTile();
+        Image tileImage = tileCutter.getNextTile();
+        while (tileImage != null) {
+            Tile tile = getTile(id);
+            tile.setImage(tileImage);
+            tileImage = tileCutter.getNextTile();
             id++;
         }
-
-        fireTilesetChanged();
     }
 
     public void checkUpdate() throws IOException {
@@ -206,10 +210,7 @@ public class TileSet
      * @param source a URI of the tileset image file
      */
     public void setSource(String source) {
-        String oldSource = externalSource;
         externalSource = source;
-
-        fireSourceChanged(oldSource, source);
     }
 
     /**
@@ -252,9 +253,7 @@ public class TileSet
      * @param name the new name for this tileset
      */
     public void setName(String name) {
-        String oldName = this.name;
         this.name = name;
-        fireNameChanged(oldName, name);
     }
 
     /**
@@ -274,26 +273,17 @@ public class TileSet
      * @return int The <b>local</b> id of the tile
      */
     public int addTile(Tile t) {
-        if (t.getId() < 0) {
-            t.setId(tiles.getMaxId() + 1);
-        }
+        if (t.getId() < 0)
+            t.setId(tiles.size());
 
-        if (tileDimensions.width < t.getWidth()) {
+        if (tileDimensions.width < t.getWidth())
             tileDimensions.width = t.getWidth();
-        }
 
-        if (tileDimensions.height < t.getHeight()) {
+        if (tileDimensions.height < t.getHeight())
             tileDimensions.height = t.getHeight();
-        }
 
-        // Add any default properties
-        // TODO: use parent properties instead?
-        t.getProperties().putAll(defaultTileProperties);
-
-        tiles.put(t.getId(), t);
+        tiles.add(t);
         t.setTileSet(this);
-
-        fireTilesetChanged();
 
         return t.getId();
     }
@@ -316,15 +306,10 @@ public class TileSet
      * indices. Removal is simply setting the reference at the specified
      * index to <b>null</b>.
      *
-     * todo: Fix the behaviour of this function? It actually does seem to
-     * todo: invalidate other tile indices due to implementation of
-     * todo: NumberedSet.
-     *
      * @param i the index to remove
      */
     public void removeTile(int i) {
-        tiles.remove(i);
-        fireTilesetChanged();
+        tiles.set(i, null);
     }
 
     /**
@@ -342,7 +327,7 @@ public class TileSet
      * @return the maximum tile id, or -1 when there are no tiles
      */
     public int getMaxTileId() {
-        return tiles.getMaxId();
+        return tiles.size() - 1;
     }
 
     /**
@@ -350,25 +335,8 @@ public class TileSet
      *
      * @return an iterator over the tiles in this tileset.
      */
-    public Iterator iterator() {
+    public Iterator<Tile> iterator() {
         return tiles.iterator();
-    }
-
-    /**
-     * Generates a vector that removes the gaps that can occur if a tile is
-     * removed from the middle of a set of tiles. (Maps tiles contiguously)
-     *
-     * @return a {@link Vector} mapping ordered set location to the next
-     *         non-null tile
-     */
-    public Vector<Tile> generateGaplessVector() {
-        Vector<Tile> gapless = new Vector<Tile>();
-
-        for (int i = 0; i <= getMaxTileId(); i++) {
-            if (getTile(i) != null) gapless.add(getTile(i));
-        }
-
-        return gapless;
     }
 
     /**
@@ -429,7 +397,7 @@ public class TileSet
      */
     public Tile getTile(int i) {
         try {
-            return (Tile) tiles.get(i);
+            return tiles.get(i);
         } catch (ArrayIndexOutOfBoundsException a) {}
         return null;
     }
@@ -520,115 +488,7 @@ public class TileSet
     }
 
 
-    /**
-     * Returns the number of images in the set.
-     *
-     * @return the number of images in the set
-     */
-    public int getTotalImages() {
-        return images.size();
-    }
-
-    /**
-     * @return an Enumeration of the image ids
-     */
-    public Enumeration<String> getImageIds() {
-        Vector<String> v = new Vector();
-        for (int id = 0; id <= images.getMaxId(); ++id) {
-            if (images.containsId(id)) {
-                v.add(Integer.toString(id));
-            }
-        }
-        return v.elements();
-    }
-
     // TILE IMAGE CODE
-
-    /**
-     * This function uses the CRC32 checksums to find the cached version of the
-     * image supplied.
-     *
-     * @param i an Image object
-     * @return returns the id of the given image, or -1 if the image is not in
-     *         the set
-     */
-    public int getIdByImage(Image i) {
-        return images.indexOf(i);
-    }
-
-    /**
-     * @param id
-     * @return the image identified by the key, or <code>null</code> when
-     *         there is no such image
-     */
-    public Image getImageById(int id) {
-    	if (transparentColor != null)
-    		return getTransparentImage((Image) images.get(id));
-        return (Image) images.get(id);
-    }
-
-    private Image getTransparentImage(Image image) {
-    	if (image.getImageData().transparentPixel != -1)
-    		return image;
-    	Image result = transparentImageCache.get(image);
-    	if (result  == null) {
-    		ImageData imageData = image.getImageData();
-    		imageData.transparentPixel = imageData.palette.getPixel(transparentColor);
-    		result = new Image(image.getDevice(),imageData);
-    		transparentImageCache.put(image,result);
-    	}
-		return result;
-	}
-
-	/**
-     * Overlays the image in the set referred to by the given key.
-     *
-     * @param id
-     * @param i
-     */
-    public void overlayImage(int id, org.eclipse.swt.graphics.Image i) {
-        images.put(id, i);
-    }
-
-    /**
-     * Returns the dimensions of an image as specified by the id.
-     *
-     * @deprecated Unless somebody can explain the purpose of this function in
-     *             its documentation, I consider this function deprecated. It
-     *             is only used by tiles, but they should in my opinion just
-     *             use their "internalImage". - Bjorn
-     * @param id the image id
-     * @return dimensions of image with referenced by given key
-     */
-    public Point getImageDimensions(int id) {
-        Image img = (Image) images.get(id);
-        if (img != null) {
-        	Rectangle bounds = img.getBounds();
-            return new Point(bounds.width, bounds.height);
-        } else {
-            return new Point(0, 0);
-        }
-    }
-
-    /**
-     * Adds the specified image to the image cache. If the image already exists
-     * in the cache, returns the id of the existing image. If it does not
-     * exist, this function adds the image and returns the new id.
-     *
-     * @param image the java.awt.Image to add to the image cache
-     * @return the id as an <code>int</code> of the image in the cache
-     */
-    public int addImage(Image image) {
-        return images.findOrAdd(image);
-    }
-
-    public int addImage(Image image, int id) {
-        return images.put(id, image);
-    }
-
-    public void removeImage(int id) {
-        images.remove(id);
-    }
 
     /**
      * Returns whether the tileset is derived from a tileset image.
@@ -638,51 +498,7 @@ public class TileSet
     public boolean isSetFromImage() {
         return tileSetImage != null;
     }
-
-    /**
-     * Checks whether each image has a one to one relationship with the tiles.
-     *
-     * @deprecated
-     * @return <code>true</code> if each image is associated with one and only
-     *         one tile, <code>false</code> otherwise.
-     */
-    public boolean isOneForOne() {
-        Iterator itr = iterator();
-
-        //[ATURK] I don't think that this check makes complete sense...
-        /*
-        while (itr.hasNext()) {
-            Tile t = (Tile)itr.next();
-            if (t.countAnimationFrames() != 1 || t.getImageId() != t.getId()
-                    || t.getImageOrientation() != 0) {
-                return false;
-            }
-        }
-        */
-
-        for (int id = 0; id <= images.getMaxId(); ++id) {
-            int relations = 0;
-            itr = iterator();
-
-            while (itr.hasNext()) {
-                Tile t = (Tile) itr.next();
-                // todo: move the null check back into the iterator?
-                if (t != null && t.getImageId() == id) {
-                    relations++;
-                }
-            }
-            if (relations != 1) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    public void setDefaultProperties(Properties defaultSetProperties) {
-        defaultTileProperties = defaultSetProperties;
-    }
-
+    
     public void addTilesetChangeListener(TilesetChangeListener listener) {
         tilesetChangeListeners.add(listener);
     }
@@ -690,25 +506,40 @@ public class TileSet
     public void removeTilesetChangeListener(TilesetChangeListener listener) {
         tilesetChangeListeners.remove(listener);
     }
+    
+    /**
+     * Generates a vector that removes the gaps that can occur if a tile is
+     * removed from the middle of a set of tiles. (Maps tiles contiguously)
+     *
+     * @return a {@link Vector} mapping ordered set location to the next
+     *         non-null tile
+     */
+    public Vector<Tile> generateGaplessVector() {
+        Vector<Tile> gapless = new Vector<Tile>();
 
-    private void fireTilesetChanged() {
-        TilesetChangedEvent event = new TilesetChangedEvent(this);
-        for (TilesetChangeListener listener : tilesetChangeListeners) {
-            listener.tilesetChanged(event);
+        for (int i = 0; i <= getMaxTileId(); i++) {
+            if (getTile(i) != null) gapless.add(getTile(i));
         }
-    }
 
-    private void fireNameChanged(String oldName, String newName) {
-        TilesetChangedEvent event = new TilesetChangedEvent(this);
-        for (TilesetChangeListener listener : tilesetChangeListeners) {
-            listener.nameChanged(event, oldName, newName);
-        }
+        return gapless;
     }
+    
+    /**
+     * Sets the tile spacing. Should be used only for tileset persisting properties.
+     * For actual tileset import use <code>importTileBitmap(Image, {@link TileCutter});
+     * @param tileSpacing
+     */
+	public void setTileSpacing(int tileSpacing) {
+		this.tileSpacing = tileSpacing;
+	}
 
-    private void fireSourceChanged(String oldSource, String newSource) {
-        TilesetChangedEvent event = new TilesetChangedEvent(this);
-        for (TilesetChangeListener listener : tilesetChangeListeners) {
-            listener.sourceChanged(event, oldSource, newSource);
-        }
-    }
+    /**
+     * Sets the tile margin. Should be used only for tileset persisting properties.
+     * For actual tileset import use <code>importTileBitmap(Image, {@link TileCutter});
+     * @param tileSpacing
+     */
+
+	public void setTileMargin(int tileMargin) {
+		this.tileMargin = tileMargin;
+	}
 }

@@ -22,6 +22,7 @@ import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Display;
 
+import tiled.core.MapLayer;
 import tiled.core.Tile;
 import tiled.core.TileLayer;
 import tiled.util.Converter;
@@ -183,5 +184,18 @@ public class SelectionLayer extends TileLayer
 	public void setSelTile(Tile currentTile) {
 		selTile = currentTile;
 		fillRegion(getSelectedArea(),selTile);
+	}
+
+	public void copyTileData(MapLayer layer) {
+		if (layer != null && layer instanceof TileLayer) {
+			Rectangle layerBounds = ((TileLayer)layer).getBounds();
+			if ((layerBounds.width > 1 || layerBounds.height > 1) && layerBounds.width == bounds.width && layerBounds.height == bounds.height) {
+				 for (int i = bounds.y; i < bounds.y + bounds.height; i++) {
+			            for (int j = bounds.x; j < bounds.x + bounds.width; j++) {
+			                setTileAt(j, i, ((TileLayer) layer).getTileAt(j - bounds.x + layerBounds.x,i - bounds.y + layerBounds.y));
+			            }
+			        }
+			}
+		}
 	}
 }

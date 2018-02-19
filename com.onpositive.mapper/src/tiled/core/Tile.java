@@ -1,13 +1,21 @@
 /*
- *  Tiled Map Editor, (c) 2004-2006
+ * Copyright 2004-2010, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
+ * Copyright 2004-2006, Adam Turk <aturk@biggeruniverse.com>
  *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
+ * This file is part of libtiled-java.
  *
- *  Adam Turk <aturk@biggeruniverse.com>
- *  Bjorn Lindeijer <bjorn@lindeijer.nl>
+ * This library is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation; either version 2.1 of the License, or (at
+ * your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ * or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public
+ * License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library;  If not, see <http://www.gnu.org/licenses/>.
  */
 
 package tiled.core;
@@ -16,24 +24,18 @@ import java.util.Properties;
 
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Image;
-import org.eclipse.swt.graphics.ImageData;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
-import org.eclipse.swt.widgets.Display;
+
+import tiled.core.TileSet;
 
 /**
  * The core class for our tiles.
- *
- * @version $Id$
  */
 public class Tile
 {
-    private Image internalImage, scaledImage;
+    private Image image;
     private int id = -1;
-    protected int tileImageId = -1;
-    private int groundHeight;          // Height above/below "ground"
-    private int tileOrientation;
-    private double myZoom = 1.0;
     private Properties properties;
     private TileSet tileset;
 
@@ -49,16 +51,11 @@ public class Tile
     /**
      * Copy constructor
      *
-     * @param t
+     * @param t tile to copy
      */
     public Tile(Tile t) {
-        properties = (Properties)t.properties.clone();
-        tileImageId = t.tileImageId;
+        properties = (Properties) t.properties.clone();
         tileset = t.tileset;
-        if (tileset != null) {
-        	Rectangle bounds = getImage().getBounds();
-            scaledImage = new Image(Display.getDefault(), getImage().getImageData().scaledTo(bounds.width * -1,bounds.height * -1));
-        }
     }
 
     /**
@@ -73,46 +70,20 @@ public class Tile
     }
 
     /**
-     * Changes the image of the tile as long as it is not null.
+     * Sets the image of the tile.
      *
      * @param i the new image of the tile
      */
     public void setImage(Image i) {
-        if (tileset != null) {
-            tileset.overlayImage(tileImageId, i);
-        } else {
-            internalImage = i;
-        }
-    }
-
-    public void setImage(int id) {
-        tileImageId = id;
+        image = i;
     }
 
     /**
-     * @deprecated
-     * @param orientation
-     */
-    public void setImageOrientation(int orientation) {
-        tileOrientation = orientation;
-    }
-
-    /**
-     * Sets the parent tileset for a tile. If the tile is already
-     * a member of a set, and this method is called with a different
-     * set as argument, the tile image is transferred to the new set.
+     * Sets the parent tileset for a tile.
      *
      * @param set
      */
     public void setTileSet(TileSet set) {
-        if (tileset != null && tileset != set) {
-            setImage(set.addImage(getImage()));
-        } else {
-            if (internalImage != null) {
-                setImage(set.addImage(internalImage));
-                internalImage = null;
-            }
-        }
         tileset = set;
     }
 
@@ -154,73 +125,16 @@ public class Tile
         return tileset;
     }
 
-    /**
-     * This drawing function handles drawing the tile image at the
-     * specified zoom level. It will attempt to use a cached copy,
-     * but will rescale if the requested zoom does not equal the
-     * current cache zoom.
-     *
-     * @param gc Graphics instance to draw to
-     * @param x x-coord to draw tile at
-     * @param y y-coord to draw tile at
-     * @param zoom Zoom level to draw the tile
-     */
-    public void drawRaw(GC gc, int x, int y, double zoom) {
-        Image img = getScaledImage(zoom);
-        if (img != null) {
-        	Rectangle bounds = img.getBounds();
-            gc.drawImage(img, x, y - bounds.height);
-        } else {
-            // TODO: Allow drawing IDs when no image data exists as a
-            // config option
-        }
-    }
-
-    /**
-     * Draws the tile at the given pixel coordinates in the given
-     * graphics context, and at the given zoom level
-     *
-     * @param g
-     * @param x
-     * @param y
-     * @param zoom
-     */
-    public void draw(GC gc, int x, int y, double zoom) {
-        // Invoke raw draw function
-        int gnd_h = (int)(groundHeight * zoom);
-        drawRaw(gc, x, y - gnd_h, zoom);
-    }
-
     public int getWidth() {
-        if (tileset != null) {
-            Point d = tileset.getImageDimensions(tileImageId);
-            return d.x;
-        } else if (internalImage != null){
-            return internalImage.getBounds().width;
-        }
+        if (image != null)
+            return image.getBounds().width;
         return 0;
     }
 
     public int getHeight() {
-        if (tileset != null) {
-            Point d = tileset.getImageDimensions(tileImageId);
-            return d.y;
-        } else if (internalImage != null) {
-            return internalImage.getBounds().height;
-        }
+        if (image != null)
+            return image.getBounds().height;
         return 0;
-    }
-
-    public int getImageId() {
-        return tileImageId;
-    }
-
-    /**
-     * @deprecated
-     * @return int
-     */
-    public int getImageOrientation() {
-        return tileOrientation;
     }
 
     /**
@@ -229,55 +143,7 @@ public class Tile
      * @return Image
      */
     public Image getImage() {
-        if (tileset != null) {
-            return tileset.getImageById(tileImageId);
-        } else {
-            return internalImage;
-        }
-    }
-
-    /**
-     * Returns a scaled instance of the tile image. Using a MediaTracker
-     * instance, this function waits until the scaling operation is done.
-     * <p/>
-     * Internally it caches the scaled image in order to optimize the common
-     * case, where the same scale is requested as the last time.
-     *
-     * @param zoom the requested zoom level
-     * @return Image
-     */
-    public Image getScaledImage(double zoom) {
-        if (zoom == 1.0) {
-            return getImage();
-        } else if (zoom == myZoom && scaledImage != null) {
-            return scaledImage;
-        } else {
-            Image img = getImage();
-            Rectangle bounds = img.getBounds();
-            if (img != null)
-            {
-                ImageData imageData = img.getImageData();
-                if (tileset != null && tileset.getTransparentColor() != null) {
-                	imageData.transparentPixel = imageData.palette.getPixel(tileset.getTransparentColor());
-                }
-				scaledImage = new Image(Display.getDefault(), imageData.scaledTo((int) Math.round(bounds.width * zoom), (int) Math.round(bounds.height * zoom)));
-                        
-
-//                MediaTracker mediaTracker = new MediaTracker(new Canvas());
-//                mediaTracker.addImage(scaledImage, 0);
-//                try {
-//                    mediaTracker.waitForID(0);
-//                }
-//                catch (InterruptedException ie) {
-//                    System.err.println(ie);
-//                }
-//                mediaTracker.removeImage(scaledImage);
-                myZoom = zoom;
-                return scaledImage;
-            }
-        }
-
-        return null;
+        return image;
     }
 
     /**
@@ -286,4 +152,13 @@ public class Tile
     public String toString() {
         return "Tile " + id + " (" + getWidth() + "x" + getHeight() + ")";
     }
+
+	public Point getSize() {		
+		if (image != null) {
+			Rectangle bounds = image.getBounds();
+            return new Point(bounds.width,bounds.height);
+		}
+		return null;
+	}
+
 }

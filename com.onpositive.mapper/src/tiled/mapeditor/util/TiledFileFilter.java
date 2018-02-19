@@ -17,7 +17,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 
 import tiled.io.PluggableMapIO;
-import tiled.io.xml.XMLMapWriter;
+import tiled.io.PluggableMapWriter;
 import tiled.mapeditor.resources.Resources;
 
 /**
@@ -47,7 +47,7 @@ public class TiledFileFilter extends ConfirmableFileFilter
         exts.add("tmx");
         exts.add("tmx.gz");
         exts.add("tsx");
-        pmio = new XMLMapWriter();
+        pmio = new PluggableMapWriter();
     }
 
     public TiledFileFilter(int filter) {
@@ -59,14 +59,14 @@ public class TiledFileFilter extends ConfirmableFileFilter
             desc = FILETYPE_TMX;
             exts.add("tmx");
             exts.add("tmx.gz");
-            pmio = new XMLMapWriter();
+            pmio = new PluggableMapWriter();
         }
 
         if ((filter & FILTER_TSX) != 0) {
             desc += FILETYPE_TSX;
             exts.add("tsx");
             if (pmio == null) {
-                pmio = new XMLMapWriter();
+                pmio = new PluggableMapWriter();
             }
         }
 

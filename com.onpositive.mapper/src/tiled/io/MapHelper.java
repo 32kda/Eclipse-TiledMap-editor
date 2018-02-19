@@ -18,8 +18,6 @@ import javax.swing.JOptionPane;
 
 import tiled.core.Map;
 import tiled.core.TileSet;
-import tiled.io.xml.XMLMapTransformer;
-import tiled.io.xml.XMLMapWriter;
 //import tiled.mapeditor.dialogs.PluginLogDialog;
 import tiled.mapeditor.plugin.PluginClassLoader;
 import tiled.mapeditor.resources.Resources;
@@ -52,23 +50,23 @@ public class MapHelper {
      *
      * @param filename filename to save the current map to
      * @param currentMap {@link tiled.core.Map} instance to save to the file
-     * @see MapWriter#writeMap(Map, String)
+     * @see TMXMapWriter#writeMap(Map, String)
      * @exception Exception
      */
     public static void saveMap(Map currentMap, String filename)
         throws Exception
     {
-        MapWriter mw;
+        TMXMapWriter mw;
         if (filename.endsWith(".tmx") || filename.endsWith(".tmx.gz")) {
             // Override, so people can't overtake our format
-            mw = new XMLMapWriter();
+            mw = new TMXMapWriter();
         } else {
-            mw = (MapWriter)pluginLoader.getWriterFor(filename);
+            mw = (TMXMapWriter)pluginLoader.getWriterFor(filename);
         }
 
         if (mw != null) {
             PluginLogger logger = new PluginLogger();
-            mw.setLogger(logger);
+//            mw.setLogger(logger);
             mw.writeMap(currentMap, filename);
             currentMap.setFilename(filename);
             reportPluginMessages(logger);
@@ -84,23 +82,23 @@ public class MapHelper {
      *
      * @param filename Filename to save the tileset to.
      * @param set The TileSet instance to save to the file
-     * @see MapWriter#writeTileset(TileSet, String)
+     * @see TMXMapWriter#writeTileset(TileSet, String)
      * @exception Exception
      */
     public static void saveTileset(TileSet set, String filename)
         throws Exception
     {
-        MapWriter mw;
+        TMXMapWriter mw;
         if (filename.endsWith(".tsx")) {
             // Override, so people can't overtake our format
-            mw = new XMLMapWriter();
+            mw = new TMXMapWriter();
         } else {
-            mw = (MapWriter)pluginLoader.getWriterFor(filename);
+            mw = (TMXMapWriter)pluginLoader.getWriterFor(filename);
         }
 
         if (mw != null) {
             PluginLogger logger = new PluginLogger();
-            mw.setLogger(logger);
+//            mw.setLogger(logger);
             mw.writeTileset(set, filename);
             set.setSource(filename);
             reportPluginMessages(logger);
@@ -121,10 +119,10 @@ public class MapHelper {
      */
     public static void saveMap(Map currentMap, PluggableMapIO pmio, String filename)
         throws Exception {
-        MapWriter mw = (MapWriter)pmio;
+        TMXMapWriter mw = (TMXMapWriter)pmio;
 
         PluginLogger logger = new PluginLogger();
-        mw.setLogger(logger);
+//        mw.setLogger(logger);
         mw.writeMap(currentMap, filename);
         currentMap.setFilename(filename);
         reportPluginMessages(logger);
@@ -138,22 +136,22 @@ public class MapHelper {
      * @param file filename of map to load
      * @return a new Map, loaded from the specified file by a plugin
      * @throws Exception
-     * @see MapReader#readMap(String)
+     * @see TMXMapReader#readMap(String)
      */
     public static Map loadMap(String file) throws Exception {
         Map ret = null;
         try {
-            MapReader mr;
+        	TMXMapReader mr;
             if (file.endsWith(".tmx") || file.endsWith(".tmx.gz")) {
                 // Override, so people can't overtake our format
-                mr = new XMLMapTransformer();
+                mr = new TMXMapReader();
             } else {
-                mr = (MapReader)pluginLoader.getReaderFor(file);
+                mr = (TMXMapReader)pluginLoader.getReaderFor(file);
             }
 
             if (mr != null) {
                 PluginLogger logger = new PluginLogger();
-                mr.setLogger(logger);
+//                mr.setLogger(logger);
                 ret = mr.readMap(file);
                 ret.setFilename(file);
                 reportPluginMessages(logger);
@@ -188,22 +186,22 @@ public class MapHelper {
      * @param file filename of map to load
      * @return A new TileSet, loaded from the specified file by a plugin
      * @throws Exception
-     * @see MapReader#readTileset(String)
+     * @see TMXMapReader#readTileset(String)
      */
     public static TileSet loadTileset(String file) throws Exception {
         TileSet ret = null;
         try {
-            MapReader mr;
+            TMXMapReader mr;
             if (file.endsWith(".tsx")) {
                 // Override, so people can't overtake our format
-                mr = new XMLMapTransformer();
+                mr = new TMXMapReader();
             } else {
-                mr = (MapReader)pluginLoader.getReaderFor(file);
+                mr = (TMXMapReader)pluginLoader.getReaderFor(file);
             }
 
             if (mr != null) {
                 PluginLogger logger = new PluginLogger();
-                mr.setLogger(logger);
+//                mr.setLogger(logger);
                 ret = mr.readTileset(file);
                 ret.setSource(file);
                 reportPluginMessages(logger);

@@ -14,6 +14,7 @@ package tiled.mapeditor.util.cutter;
 
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.graphics.Point;
+import org.eclipse.swt.graphics.RGB;
 
 /**
  * A generic interface to a class that implements tile cutting behavior.
@@ -52,4 +53,6 @@ public interface TileCutter
      * @return the name of this tile cutter
      */
     public String getName();
+
+	public void setTransparentColor(RGB transparentColor);
 }

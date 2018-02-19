@@ -62,11 +62,11 @@ public class IsoMapView extends MapView
         }
     }
 
-    protected void paintLayer(GC g2d, TileLayer layer) {
+    protected void paintLayer(GC gc, TileLayer layer) {
         // Turn anti alias on for selection drawing
-        g2d.setAntialias(SWT.ON);
+        gc.setAntialias(SWT.ON);
 
-        Rectangle clipRect = g2d.getClipping();
+        Rectangle clipRect = gc.getClipping();
         Point tileSize = getTileSize();
         int tileStepY = tileSize.y / 2 == 0 ? 1 : tileSize.y / 2;
         Polygon gridPoly = createGridPolygon(0, -tileSize.y, 0);
@@ -91,14 +91,18 @@ public class IsoMapView extends MapView
 
                 if (tile != null) {
                     if (layer instanceof SelectionLayer) {
+                    	if (shouldPaintBrushTile())
+                    		RenderingUtil.drawTile(gc, tile, drawLoc.x, drawLoc.y, zoom);
                         //Polygon gridPoly = createGridPolygon(
                                 //drawLoc.x, drawLoc.y - tileSize.height, 0);
-                        gridPoly.translate(drawLoc.x, drawLoc.y);
-                        g2d.fillPolygon(Converter.getPolygonArray(gridPoly));
-                        gridPoly.translate(-drawLoc.x, -drawLoc.y);
+                        gridPoly.translate(drawLoc.x, drawLoc.y - tileSize.y / 2);
+                        gc.setAlpha(SEL_HOVER_ALPHA);
+                        gc.fillPolygon(Converter.getPolygonArray(gridPoly));
+                        gridPoly.translate(-drawLoc.x, -(drawLoc.y - tileSize.y / 2));
+                        gc.setAlpha(OPAQUE);
                         //paintEdge(g2d, layer, drawLoc.x, drawLoc.y);
                     } else {
-                        tile.draw(g2d, drawLoc.x, drawLoc.y, zoom);
+                        RenderingUtil.drawTile(gc, tile, drawLoc.x, drawLoc.y, zoom);
                     }
                 }
 
@@ -231,6 +235,25 @@ public class IsoMapView extends MapView
 
         redraw(x1, y1, x2 - x1, y2 - y1, true);
     }
+    
+    public void repaintRegion(Rectangle region, Point brushSize) {
+        Point tileSize = getTileSize();
+        int maxExtraHeight =
+            (int)(map.getTileHeightMax() * zoom) - tileSize.y;
+
+        int mapX1 = region.x;
+        int mapY1 = region.y;
+        int mapX2 = mapX1 + region.width;
+        int mapY2 = mapY1 + region.height;
+
+        int x1 = tileToScreenCoords(mapX1, mapY2).x;
+        int y1 = tileToScreenCoords(mapX1, mapY1).y - maxExtraHeight;
+        int x2 = tileToScreenCoords(mapX2, mapY1).x;
+        int y2 = tileToScreenCoords(mapX2, mapY2).y;
+
+        redraw(x1, y1, x2 - x1, y2 - y1,true);
+    }
+    
 
     public Point getPreferredSize() {
         Point tileSize = getTileSize();
@@ -298,5 +321,11 @@ public class IsoMapView extends MapView
         return new Point(
                 ((x - y) * tileSize.x / 2) + originX,
                 ((x + y) * tileSize.y / 2));
+    }
+    
+    @Override
+    public Point getSnappedVector(Point vector) {
+    	Point tilePoint = screenToTileCoords(vector.x, vector.y);
+    	return tileToScreenCoords(tilePoint.x, tilePoint.y);
     }
 }

@@ -25,7 +25,9 @@ import java.util.prefs.Preferences;
  */
 public final class TiledConfiguration
 {
-    public static final int RECENT_FILE_COUNT = 8;
+    private static final String RECENT = "recent";
+
+	public static final int RECENT_FILE_COUNT = 8;
 
     private static final Preferences prefs = Preferences.userRoot().node("tiled");
 
@@ -79,7 +81,7 @@ public final class TiledConfiguration
         recent.add(0, mapFile);
 
         // Store the new recent file listing
-        Preferences recentNode = prefs.node("recent");
+        Preferences recentNode = prefs.node(RECENT);
         for (int i = 0; i < RECENT_FILE_COUNT && i < recent.size(); i++)
         {
             String recentFile = recent.get(i);
@@ -94,7 +96,7 @@ public final class TiledConfiguration
      */
     public static List<String> getRecentFiles() {
         List<String> recent = new ArrayList<String>(RECENT_FILE_COUNT);
-        Preferences recentNode = prefs.node("recent");
+        Preferences recentNode = prefs.node(RECENT);
         for (int i = 0; i < RECENT_FILE_COUNT; i++)
         {
             String recentFile = recentNode.get("file" + i, "");
@@ -106,6 +108,6 @@ public final class TiledConfiguration
     }
 
     public static String fileDialogStartLocation() {
-        return node("recent").get("file0", null);
+        return node(RECENT).get("file0", null);
     }
 }

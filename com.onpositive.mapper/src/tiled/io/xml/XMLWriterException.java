@@ -12,12 +12,14 @@
 
 package tiled.io.xml;
 
-/**
- * @version $Id$
- */
 public class XMLWriterException extends RuntimeException
 {
-    public XMLWriterException(String error) {
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+
+	public XMLWriterException(String error) {
         super(error);
     }
 }

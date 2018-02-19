@@ -7,8 +7,7 @@
       <editor
             name="Map Editor"
             extensions="tmx"
-            icon="icons/sample.gif"
-            contributorClass="org.eclipse.ui.texteditor.BasicTextEditorActionContributor"
+            icon="icons/tiled-icon-16.gif"
             class="com.onpositive.mapper.editors.MapEditor"
             id="com.onpositive.mapper.editors.MapEditor">
       </editor>
@@ -22,14 +21,14 @@
       <view
             category="com.onpositive.mapper"
             class="com.onpositive.mapper.views.TilesetView"
-            icon="icons/sample.gif"
+            icon="icons/tiles-16.gif"
             id="com.onpositive.mapper.views.TilesetView"
             name="Tilesets">
       </view>
       <view
             category="com.onpositive.mapper"
             class="com.onpositive.mapper.views.LayerView"
-            icon="icons/sample.gif"
+            icon="icons/stack.png"
             id="com.onpositive.mapper.views.LayerView"
             name="Layer View">
       </view>
@@ -39,6 +38,431 @@
       <contexts
             file="contexts.xml">
       </contexts>
+   </extension>
+   
+   <extension
+         point="org.eclipse.ui.perspectives">
+      <perspective
+            class="com.onpositive.mapper.perspective.MapperPerspective"
+            icon="icons/tiled-icon-16.gif"
+            id="com.onpositive.mapper.perspective"
+            name="Tiled Map Editing ">
+         <description>
+            TMX file map editor
+         </description>
+      </perspective>
+   </extension>
+   <extension
+         point="org.eclipse.ui.newWizards">
+      <category
+            id="com.onpositive.mapper.mapCategory"
+            name="Tiled Maps">
+      </category>
+      <wizard
+            category="com.onpositive.mapper.mapCategory"
+            class="com.onpositive.mapper.newwizard.NewTMXWizard"
+            finalPerspective="com.onpositive.mapper.perspective"
+            hasPages="true"
+            icon="icons/tiled-icon-16.gif"
+            id="com.onpositive.mapper.tmxwizard"
+            name="New TMX file">
+      </wizard>
+   </extension>
+   <extension
+         point="org.eclipse.ui.editorActions">
+      <editorContribution
+            id="com.onpositive.mapper.mapEditorContribution"
+            targetID="com.onpositive.mapper.editors.MapEditor">
+         <action
+               class="com.onpositive.mapper.actions.ResizeObjectPointerStateAction"
+               icon="icons/object-resize-16.png"
+               id="com.onpositive.mapper.resizeObjAction"
+               label="Move/Resize Object"
+               style="toggle"
+               toolbarPath="mapobjects">
+         </action>
+         <action
+               class="com.onpositive.mapper.actions.MoveObjectPointerStateAction"
+               icon="icons/object-move-16.png"
+               id="com.onpositive.mapper.moveObjAction"
+               label="Move Object"
+               style="toggle"
+               toolbarPath="mapobjects">
+         </action>
+         <action
+               class="com.onpositive.mapper.actions.RemoveObjPointerStateAction"
+               icon="icons/removeobj-16.gif"
+               id="com.onpositive.mapper.removeObjAction"
+               label="Remove Object"
+               style="toggle"
+               toolbarPath="mapobjects">
+         </action>
+         <action
+               class="com.onpositive.mapper.actions.AddObjectPointerStateAction"
+               definitionId="com.onpositive.mapper.addObjectCommand"
+               icon="icons/addobj-16.gif"
+               id="com.onpositive.mapper.addObjAction"
+               label="Add Object"
+               style="toggle"
+               toolbarPath="mapobjects">
+         </action>
+         <action
+               class="com.onpositive.mapper.actions.MarqeePointerStateAction"
+               definitionId="com.onpositive.mapper.rectSelectToolCommand"
+               icon="icons/rect-select-16.png"
+               id="com.onpositive.mapper.select"
+               label="Rectangular Selection"
+               style="radio"
+               toolbarPath="normal/additions">
+         </action>
+         <action
+               class="com.onpositive.mapper.actions.EyedropPointerStateAction"
+               icon="icons/color-picker-16.png"
+               id="com.onpositive.mapper.eyedrop"
+               label="Eye Dropper"
+               style="radio"
+               toolbarPath="normal/additions">
+         </action>
+         <action
+               class="com.onpositive.mapper.actions.FillPointerStateAction"
+               definitionId="com.onpositive.mapper.fillToolCommand"
+               icon="icons/bucket-fill-16.png"
+               id="com.onpositive.mapper.fillAction"
+               label="Fill"
+               style="radio"
+               toolbarPath="normal/additions">
+         </action>
+         <action
+               class="com.onpositive.mapper.actions.ErasePointerStateAction"
+               definitionId="com.onpositive.mapper.eraseToolCommand"
+               icon="icons/eraser-16.png"
+               id="com.onpositive.mapper.eraseAction"
+               label="Erase"
+               style="radio"
+               toolbarPath="normal/additions">
+         </action>
+         <action
+               class="com.onpositive.mapper.actions.MovePointerStateAction"
+               definitionId="com.onpositive.mapper.moveToolCommand"
+               icon="icons/move-16.png"
+               id="com.onpositive.mapper.moveAction"
+               label="Move"
+               style="radio"
+               toolbarPath="normal/additions">
+         </action>
+         <action
+               class="com.onpositive.mapper.actions.DrawPointerStateAction"
+               definitionId="com.onpositive.mapper.drawToolCommand"
+               icon="icons/pencil-16.png"
+               id="com.onpositive.mapper.drawAction"
+               label="Draw"
+               style="radio"
+               toolbarPath="normal/additions"
+               tooltip="Draw">
+         </action>
+         <action
+               class="com.onpositive.mapper.actions.SnapToGridAction"
+               icon="icons/snap_grid.png"
+               id="com.onpositive.mapper.snapToGridAction"
+               label="Snap To Grid"
+               style="toggle"
+               toolbarPath="mapview">
+         </action>
+         <action
+               class="com.onpositive.mapper.actions.ShowGridAction"
+               icon="icons/grid.png"
+               id="com.onpositive.mapper.showGridAction"
+               label="Show Grid "
+               style="toggle"
+               toolbarPath="mapview">
+         </action>
+         <action
+               class="com.onpositive.mapper.actions.HighlightCurrentLayerAction"
+               icon="icons/highlightmarker-red.png"
+               id="com.onpositive.mapper.highlightCurrentLayer"
+               label="Highlight Current Layer"
+               style="toggle"
+               toolbarPath="mapview">
+         </action>
+         <menu
+               id="com.onpositive.mapper.mapMenu"
+               label="Map"
+               path="additions">
+            <separator
+                  name="addGroup">
+            </separator>
+            <separator
+                  name="modifyGroup">
+            </separator>
+            <groupMarker
+                  name="tilesetGroup">
+            </groupMarker>
+         </menu>
+         <action
+               class="com.onpositive.mapper.actions.MoveLayerDownAction"
+               definitionId="com.onpositive.mapper.moveLayerDownCommand"
+               icon="icons/gnome-down.png"
+               id="com.onpositive.mapper.moveDown"
+               label="Move Layer Down"
+               menubarPath="com.onpositive.mapper.mapMenu/modifyGroup"
+               style="push">
+         </action>
+         <action
+               class="com.onpositive.mapper.actions.MoveLayerUpAction"
+               definitionId="com.onpositive.mapper.moveLayerUpCommand"
+               icon="icons/gnome-up.png"
+               id="com.onpositive.mapper.moveUp"
+               label="Move Layer Up"
+               menubarPath="com.onpositive.mapper.mapMenu/modifyGroup"
+               style="push">
+         </action>
+         <action
+               class="com.onpositive.mapper.actions.CloneLayerAction"
+               icon="icons/layer-clone.png"
+               id="com.onpositive.mapper.cloneAction"
+               label="Clone Layer"
+               menubarPath="com.onpositive.mapper.mapMenu/modifyGroup"
+               style="push">
+         </action>
+         <action
+               class="com.onpositive.mapper.actions.DeleteLayerAction"
+               icon="icons/gnome-delete.png"
+               id="com.onpositive.mapper.deleteLayer"
+               label="Delete Layer"
+               menubarPath="com.onpositive.mapper.mapMenu/addGroup"
+               style="push">
+         </action>
+         <action
+               class="com.onpositive.mapper.actions.MergeLayerDownAction"
+               icon="icons/stock-merge-down-16.png"
+               id="com.onpositive.mapper.mergeDown"
+               label="Merge Down"
+               menubarPath="com.onpositive.mapper.mapMenu/addGroup"
+               style="push">
+         </action>
+         <action
+               class="com.onpositive.mapper.actions.AddObjectGroupAction"
+               icon="icons/new-object-layer.png"
+               id="com.onpositive.mapper.addObjectGroup"
+               label="Add Object Group"
+               menubarPath="com.onpositive.mapper.mapMenu/addGroup"
+               style="push">
+         </action>
+         <action
+               class="com.onpositive.mapper.actions.AddLayerAction"
+               icon="icons/gnome-new.png"
+               id="com.onpositive.mapper.addLayer"
+               label="Add Layer"
+               menubarPath="com.onpositive.mapper.mapMenu/addGroup"
+               style="push">
+         </action>
+      </editorContribution>
+   </extension>
+   <extension
+         point="org.eclipse.ui.viewActions">
+      <viewContribution
+            id="com.onpositive.mapper.tilesetViewContribution"
+            targetID="com.onpositive.mapper.views.TilesetView">
+         <action
+               class="com.onpositive.mapper.actions.AddTilesetAction"
+               icon="icons/add.png"
+               id="com.onpositive.mapper.addTileset"
+               label="Add Tileset"
+               style="push"
+               toolbarPath="basic">
+         </action>
+         <action
+               class="com.onpositive.mapper.actions.RemoveTilesetAction"
+               icon="icons/remove.gif"
+               id="com.onpositive.mapper.removeTileset"
+               label="Remove Tileset"
+               style="push"
+               toolbarPath="basic">
+         </action>
+      </viewContribution>
+   </extension>
+   <extension
+         point="org.eclipse.core.runtime.adapters">
+      <factory
+            adaptableType="tiled.core.MapObject"
+            class="com.onpositive.mapper.adapters.PropAdapterFactory">
+         <adapter
+               type="org.eclipse.ui.views.properties.IPropertySource">
+         </adapter>
+      </factory>
+   </extension>
+   <extension
+         point="org.eclipse.ui.commands">
+      <category
+            id="com.onpositive.mapper.layers"
+            name="Layers">
+      </category>
+      <command
+            categoryId="com.onpositive.mapper.layers"
+            defaultHandler="com.onpositive.mapper.handlers.SelectPreviousLayerHandler"
+            id="com.onpositive.mapper.selectPreviousLayerCommand"
+            name="Select previous layer">
+      </command>
+      <command
+            categoryId="com.onpositive.mapper.layers"
+            defaultHandler="com.onpositive.mapper.handlers.SelectNextLayerHandler"
+            id="com.onpositive.mapper.selectNextLayerCommand"
+            name="Select next layer">
+      </command>
+      <command
+            defaultHandler="com.onpositive.mapper.handlers.HighlightLayerActionHandler"
+            id="com.onpositive.mapper.highlightCurrentLayer"
+            name="Highlight current layer">
+         <state
+               class="org.eclipse.ui.handlers.RegistryToggleState:false"
+               id="STYLE">
+         </state>
+      </command>
+      <category
+            id="com.onpositive.mapper.tilesets"
+            name="Tilesets">
+      </category>
+      <command
+            category="com.onpositive.mapper.tilesets"
+            defaultHandler="com.onpositive.mapper.handlers.AddTilesetHandler"
+            id="com.onpositive.mapper.addTileset"
+            name="Add tileset">
+      </command>
+      <command
+            id="com.onpositive.mapper.moveLayerUpCommand"
+            name="Move Layer Up">
+      </command>
+      <command
+            id="com.onpositive.mapper.moveLayerDownCommand"
+            name="Move Layer Down">
+      </command>
+      <command
+            id="com.onpositive.mapper.drawToolCommand"
+            name="Draw Tool">
+      </command>
+      <command
+            id="com.onpositive.mapper.eraseToolCommand"
+            name="Erase Tool">
+      </command>
+      <command
+            id="com.onpositive.mapper.rectSelectToolCommand"
+            name="Rectangular Selection Tool">
+      </command>
+      <command
+            id="com.onpositive.mapper.moveToolCommand"
+            name="Move Tool">
+      </command>
+      <command
+            id="com.onpositive.mapper.fillToolCommand"
+            name="Fill Tool">
+      </command>
+      <command
+            id="com.onpositive.mapper.addObjectCommand"
+            name="Add Object Tool">
+      </command>
+   </extension>
+   <extension
+         point="org.eclipse.ui.bindings">
+      <key
+            commandId="com.onpositive.mapper.selectPreviousLayerCommand"
+            contextId="com.onpositive.mapper.context"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="PAGE_UP">
+      </key>
+      <key
+            commandId="com.onpositive.mapper.selectNextLayerCommand"
+            contextId="com.onpositive.mapper.context"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="PAGE_DOWN">
+      </key>
+      <key
+            commandId="com.onpositive.mapper.highlightCurrentLayer"
+            contextId="com.onpositive.mapper.context"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="H">
+      </key>
+      <key
+            commandId="com.onpositive.mapper.moveLayerUpCommand"
+            contextId="com.onpositive.mapper.context"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="M1+M2+ARROW_UP">
+      </key>
+      <key
+            commandId="com.onpositive.mapper.moveLayerDownCommand"
+            contextId="com.onpositive.mapper.context"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="M1+M2+ARROW_DOWN">
+      </key>
+      <key
+            commandId="com.onpositive.mapper.drawToolCommand"
+            contextId="com.onpositive.mapper.context"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="D">
+      </key>
+      <key
+            commandId="com.onpositive.mapper.moveToolCommand"
+            contextId="com.onpositive.mapper.context"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="M">
+      </key>
+      <key
+            commandId="com.onpositive.mapper.eraseToolCommand"
+            contextId="com.onpositive.mapper.context"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="E">
+      </key>
+      <key
+            commandId="com.onpositive.mapper.rectSelectToolCommand"
+            contextId="com.onpositive.mapper.context"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="R">
+      </key>
+      <key
+            commandId="com.onpositive.mapper.fillToolCommand"
+            contextId="com.onpositive.mapper.context"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="F">
+      </key>
+      <key
+            commandId="com.onpositive.mapper.addObjectCommand"
+            contextId="com.onpositive.mapper.context"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="O">
+      </key>
+   </extension>
+   <extension
+         point="org.eclipse.ui.contexts">
+      <context
+            id="com.onpositive.mapper.context"
+            name="Mapper Context">
+      </context>
+   </extension>
+   <extension
+         point="org.eclipse.ui.menus">
+      <menuContribution
+            allPopups="false"
+            locationURI="menu:org.eclipse.ui.main.menu">
+         <menu
+               label="Tilesets">
+            <command
+                  commandId="com.onpositive.mapper.addTileset"
+                  label="Add Tileset"
+                  style="push">
+               <visibleWhen>
+                  <with
+		                variable="activeContexts">
+		             <iterate
+		                   ifEmpty="false"
+		                   operator="or">
+		                <equals
+		                      value="com.onpositive.mapper.context">
+		                </equals>
+		             </iterate>
+		          </with>
+               </visibleWhen>
+            </command>
+         </menu>
+      </menuContribution>
    </extension>
 
 </plugin>

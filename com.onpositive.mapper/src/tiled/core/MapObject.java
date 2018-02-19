@@ -13,22 +13,25 @@
 package tiled.core;
 
 import java.util.Properties;
-import java.io.File;
-import java.io.IOException;
-import javax.imageio.ImageIO;
 
 import org.eclipse.swt.graphics.Image;
+import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Display;
+import org.eclipse.ui.plugin.AbstractUIPlugin;
 
 import tiled.util.Converter;
+import tiled.util.Util;
+
+import com.onpositive.mapper.MapperPlugin;
 
 /**
  * An object occupying an {@link ObjectGroup}.
  */
 public class MapObject implements Cloneable
 {
-    private Properties properties = new Properties();
+    private static final String NOTIFICATION_ERROR_PATH = "icons/notification_error.png";
+	private Properties properties = new Properties();
     private ObjectGroup objectGroup;
     private Rectangle bounds = new Rectangle(0,0,0,0);
     private String name = "Object";
@@ -41,7 +44,7 @@ public class MapObject implements Cloneable
         bounds = new Rectangle(x, y, width, height);
     }
 
-    public Object clone() throws CloneNotSupportedException {
+    public MapObject clone() throws CloneNotSupportedException {
         MapObject clone = (MapObject) super.clone();
         clone.bounds = new Rectangle(bounds.x,bounds.y,bounds.width,bounds.height);
         clone.properties = (Properties) properties.clone();
@@ -78,20 +81,37 @@ public class MapObject implements Cloneable
     }
 
     public void setImageSource(String source) {
+//    	File sourceFile = new File(source);
+//    	String sourcePath = source;
+//    	if (!sourceFile.isAbsolute()) {
+//    		File baseFile = new File(objectGroup.getMap().getFilename());
+//    		if (baseFile.exists()) {
+//    			File file = new File(baseFile.getParentFile(),source);
+//    			source = fi
+//    		}
+//    	}
         if (imageSource.equals(source))
             return;
 
         imageSource = source;
 
-        // Attempt to read the image
-        if (imageSource.length() > 0) {
-               image = new Image(Display.getDefault(),imageSource);
-        } else {
-            image = null;
-        }
+        loadImage(imageSource);
 
         scaledImage = null;
     }
+
+	protected void loadImage(String source) {
+		// Attempt to read the image
+        if (source.length() > 0) {
+        	try {
+        		image = new Image(Display.getDefault(),source);
+        	} catch (Exception e) {
+        		image = AbstractUIPlugin.imageDescriptorFromPlugin(MapperPlugin.PLUGIN_ID,NOTIFICATION_ERROR_PATH).createImage();
+        	}
+        } else {
+            image = null;
+        }
+	}
 
     /**
      * Returns the image to be used when drawing this object. This image is
@@ -106,9 +126,8 @@ public class MapObject implements Cloneable
 
         final int zoomedWidth = (int) (getWidth() * zoom);
         final int zoomedHeight = (int) (getHeight() * zoom);
-        Rectangle bounds2 = scaledImage.getBounds();
-        if (scaledImage == null || bounds2.width != zoomedWidth
-                || bounds2.height != zoomedHeight)
+        if (scaledImage == null || scaledImage.getBounds().width != zoomedWidth
+                || scaledImage.getBounds().height != zoomedHeight)
         {
             scaledImage = new Image(Display.getDefault(), image.getImageData().scaledTo(zoomedWidth, zoomedHeight));
         }
@@ -122,6 +141,16 @@ public class MapObject implements Cloneable
 
     public void setX(int x) {
         bounds.x = x;
+    }
+    
+    public void setLocation(Point location) {
+    	bounds.x = location.x;
+    	bounds.y = location.y;
+    }
+    
+    public void setLocation(int x, int y) {
+    	bounds.x = x;
+    	bounds.y = y;
     }
 
     public int getY() {
@@ -179,4 +208,14 @@ public class MapObject implements Cloneable
     public String toString() {
         return type + " (" + getX() + "," + getY() + ")";
     }
+
+	public void setImageSource(String basePath, String source) {
+        imageSource = source;
+        loadImage(Util.getAbsoluteFromRelative(basePath,source));
+        scaledImage = null;
+	}
+
+	public void setBounds(int x, int y, int width, int height) {
+		this.bounds = new Rectangle(x,y,width,height);
+	}
 }

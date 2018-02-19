@@ -34,7 +34,7 @@ import tiled.view.MapView;
 /**
  * @version $Id$
  */
-public class ShapeBrush extends AbstractBrush
+public class ShapeBrush extends AbstractBrush implements ITileBrush
 {
     protected Area shape;
     protected Tile paintTile;
@@ -91,6 +91,7 @@ public class ShapeBrush extends AbstractBrush
         paintTile = t;
     }
 
+    @Override
     public Tile getTile() {
         return paintTile;
     }

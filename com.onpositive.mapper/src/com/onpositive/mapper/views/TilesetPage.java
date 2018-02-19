@@ -24,8 +24,8 @@ public class TilesetPage extends Page implements IPage {
 	public void createControl(Composite parent) {
 		composite = new Composite(parent,SWT.NONE);
 		composite.setLayout(new FillLayout());
-		TabbedTilesetsPane pane = new TabbedTilesetsPane(mapEditor,composite);
-		pane.setMap(mapEditor.getMap());
+		TabbedTilesetsPane pane = new TabbedTilesetsPane(getMapEditor(),composite);
+		pane.setMap(getMapEditor().getMap());
 	}
 
 	@Override
@@ -37,6 +37,10 @@ public class TilesetPage extends Page implements IPage {
 	public void setFocus() {
 		// TODO Auto-generated method stub
 
+	}
+
+	public MapEditor getMapEditor() {
+		return mapEditor;
 	}
 
 }

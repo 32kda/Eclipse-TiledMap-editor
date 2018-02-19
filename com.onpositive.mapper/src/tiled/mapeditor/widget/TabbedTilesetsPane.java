@@ -156,6 +156,7 @@ public class TabbedTilesetsPane extends Composite implements TileSelectionListen
      */
     public void tileSelected(TileSelectionEvent e) {
         mapEditor.setCurrentTile(e.getTile());
+        setPointerState();
     }
 
     /**
@@ -164,7 +165,14 @@ public class TabbedTilesetsPane extends Composite implements TileSelectionListen
      */
     public void tileRegionSelected(TileRegionSelectionEvent e) {
         mapEditor.setBrush(new CustomBrush(e.getTileRegion()));
+        setPointerState();
     }
+
+	protected void setPointerState() {
+		int state = mapEditor.getCurrentPointerState();
+        if (state != MapEditor.PS_PAINT && state != MapEditor.PS_POUR)
+        	mapEditor.setCurrentPointerState(MapEditor.PS_PAINT);
+	}
 
     private class MyChangeListener implements MapChangeListener, TilesetChangeListener
     {

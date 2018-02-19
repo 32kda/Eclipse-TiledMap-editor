@@ -6,6 +6,9 @@ import java.util.ResourceBundle;
 import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.widgets.Display;
+import org.eclipse.ui.plugin.AbstractUIPlugin;
+
+import com.onpositive.mapper.MapperPlugin;
 
 
 public class Resources {
@@ -38,5 +41,9 @@ public class Resources {
 
 	public static ImageDescriptor getImageDescriptor(String key) {
 		return ImageDescriptor.createFromFile(Resources.class,key);
+	}
+	
+	public static ImageDescriptor getImageDescriptorFromPlugin(String key) {
+		return AbstractUIPlugin.imageDescriptorFromPlugin(MapperPlugin.PLUGIN_ID,"icons/"+key);
 	}
 }

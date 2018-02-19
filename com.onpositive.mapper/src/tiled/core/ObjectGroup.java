@@ -16,8 +16,8 @@ import java.awt.Shape;
 import java.awt.geom.Area;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Rectangle2D;
-import java.util.LinkedList;
 import java.util.Iterator;
+import java.util.LinkedList;
 
 import org.eclipse.swt.graphics.Rectangle;
 
@@ -27,6 +27,7 @@ import org.eclipse.swt.graphics.Rectangle;
 public class ObjectGroup extends MapLayer
 {
     private LinkedList<MapObject> objects = new LinkedList<MapObject>();
+    protected Rectangle pixelBounds = null;
 
     /**
      * Default constructor.
@@ -79,7 +80,7 @@ public class ObjectGroup extends MapLayer
     }
 
     public void mergeOnto(MapLayer other) {
-        // TODO: Implement merging with another object group
+    	copyTo(other);    //Seems there's no difference for copy & merge for ObjectGroup
     }
 
     public void maskedMergeOnto(MapLayer other, Area mask) {
@@ -87,14 +88,39 @@ public class ObjectGroup extends MapLayer
     }
 
     public void copyFrom(MapLayer other) {
-        // TODO: Implement copying from another object group (same as merging)
+    	try {
+			if (other instanceof ObjectGroup) {
+				for (MapObject object : ((ObjectGroup) other).objects) {
+					objects.add(object.clone());
+				}
+			}
+		} catch (CloneNotSupportedException e) {
+			// Should never happen
+			e.printStackTrace();
+		}
     }
 
     public void maskedCopyFrom(MapLayer other, Area mask) {
         // TODO: Figure out what object group should do with this method
     }
 
-    public void copyTo(MapLayer other) {
+    @Override
+	public void maskedCopyFrom(MapLayer other, Rectangle mask) {
+		// TODO: Figure out what object group should do with this method
+		
+	}
+
+	public void copyTo(MapLayer other) {
+    	try {
+			if (other instanceof ObjectGroup) {
+				for (MapObject object : objects) {
+					((ObjectGroup) other).objects.add(object.clone());
+				}
+			}
+		} catch (CloneNotSupportedException e) {
+			// Should never happen
+			e.printStackTrace();
+		}
         // TODO: Implement copying to another object group (same as merging)
     }
 
@@ -136,9 +162,20 @@ public class ObjectGroup extends MapLayer
         objects.remove(o);
         o.setObjectGroup(null);
     }
+    
+    public void removeAllObjects() {
+    	for (MapObject object : objects) {
+			object.setObjectGroup(this);
+		}
+    	objects.clear();
+    }
 
     public Iterator<MapObject> getObjects() {
         return objects.iterator();
+    }
+    
+    public int getObjectsCount() {
+    	return objects.size();
     }
 
     public MapObject getObjectAt(int x, int y) {
@@ -161,6 +198,13 @@ public class ObjectGroup extends MapLayer
             }
         }
         return null;
+    }
+    
+    public Rectangle getActualObjectRectangle(MapObject obj) {
+    	 Rectangle rect = new Rectangle(obj.getX() + bounds.x * myMap.getTileWidth(),
+                 obj.getY() + bounds.y * myMap.getTileHeight(),
+                 obj.getWidth(), obj.getHeight());
+    	 return rect;
     }
 
     // This method will work at any zoom level, provided you provide the correct zoom factor. It also adds a one pixel buffer (that doesn't change with zoom).
@@ -185,4 +229,48 @@ public class ObjectGroup extends MapLayer
 
         return null;
     }
+
+    /**
+     * Returns {@link ObjectGroup} bounds in pixels (Pixel bounds are needed by some methods, e.g. selection API)
+     * @return {@link ObjectGroup} bounds in pixels
+     */
+	public Rectangle getPixelBounds() {
+		if (pixelBounds != null)
+			return pixelBounds;
+		else if (getMap() != null){
+			int tileWidth = getMap().getTileWidth();
+			int tileHeight = getMap().getTileHeight();
+			return new Rectangle(bounds.x * tileWidth, bounds.y * tileHeight, bounds.width * tileWidth, bounds.height * tileHeight);
+		}
+		return null;
+	}
+
+	/**
+	 * Sets {@link ObjectGroup} bounds in pixels
+	 * @param pixelBounds {@link ObjectGroup} bounds in pixels. 
+	 */
+	public void setPixelBounds(Rectangle pixelBounds) {
+		this.pixelBounds = pixelBounds;
+	}
+
+	/**
+	 * Sets {@link ObjectGroup} bounds in pixels
+	 * @param x {@link ObjectGroup} bounds in pixels.
+	 * @param y
+	 * @param width
+	 * @param height
+	 */
+	public void setPixelBounds(int x, int y, int width, int height) {
+		this.pixelBounds = new Rectangle(x,y,width,height);;
+	}
+	
+	/**
+	 * Translates object group in pixels
+	 * @param dx x translation, pixels
+	 * @param dy y translation, pixels
+	 */
+	public void translatePixel(int dx, int dy) {
+		this.pixelBounds.x += dx;
+		this.pixelBounds.y += dy;
+	}
 }

@@ -30,7 +30,7 @@ import tiled.util.Converter;
 public class TileLayer extends MapLayer
 {
     protected Tile[][] map;
-    protected HashMap tileInstanceProperties = new HashMap();
+    protected HashMap<Object, Properties> tileInstanceProperties = new HashMap<Object, Properties>();
 
     public Properties getTileInstancePropertiesAt(int x, int y) {
         if (!bounds.contains(x, y)) {
@@ -420,7 +420,21 @@ public class TileLayer extends MapLayer
         }
     }
 
-    /**
+    @Override
+	public void maskedCopyFrom(MapLayer other, Rectangle mask) {
+    	  if (!canEdit() || !(other instanceof TileLayer))
+              return;
+
+          for (int y = mask.y; y < mask.y + mask.height; y++) {
+              for (int x = mask.x; x < mask.x + mask.width; x++) {
+                  if (mask.contains(x,y)) {
+                      setTileAt(x, y, ((TileLayer) other).getTileAt(x, y));
+                  }
+              }
+          }
+	}
+
+	/**
      * Unlike mergeOnto, copyTo includes the null tile when merging.
      *
      * @see MapLayer#copyFrom
@@ -450,7 +464,7 @@ public class TileLayer extends MapLayer
 
         // Clone the layer data
         clone.map = new Tile[map.length][];
-        clone.tileInstanceProperties = new HashMap();
+        clone.tileInstanceProperties = new HashMap<Object, Properties>();
 
         for (int i = 0; i < map.length; i++) {
             clone.map[i] = new Tile[map[i].length];
@@ -461,7 +475,7 @@ public class TileLayer extends MapLayer
 
                 if (p != null) {
                     Integer key = i + j * bounds.width;
-                    clone.tileInstanceProperties.put(key, p.clone());
+                    clone.tileInstanceProperties.put(key, (Properties) p.clone());
                 }
             }
         }
@@ -482,7 +496,7 @@ public class TileLayer extends MapLayer
             return;
 
         Tile[][] newMap = new Tile[height][width];
-        HashMap newTileInstanceProperties = new HashMap();
+        HashMap<Object, Properties> newTileInstanceProperties = new HashMap<Object, Properties>();
 
         int maxX = Math.min(width, bounds.width + dx);
         int maxY = Math.min(height, bounds.height + dy);

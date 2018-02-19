@@ -25,6 +25,7 @@ import org.eclipse.swt.events.MouseMoveListener;
 import org.eclipse.swt.events.PaintEvent;
 import org.eclipse.swt.events.PaintListener;
 import org.eclipse.swt.graphics.GC;
+import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Composite;
@@ -42,6 +43,56 @@ import tiled.mapeditor.util.TileSelectionListener;
 public class TilePalettePanel extends Composite implements 
        TilesetChangeListener, PaintListener
 {
+	protected class TileMouseListener implements MouseListener, MouseMoveListener {
+		private Point origin;
+   	 
+		@Override
+		public void mouseUp(org.eclipse.swt.events.MouseEvent e) {
+			Point point = getTileCoordinates(e.x, e.y);
+            Rectangle select = new Rectangle(origin.x, origin.y, 0, 0);
+            select = add(select, point.x , point.y);
+            if (!select.equals(selection)) {
+                setSelection(select);
+                scrollTileToVisible(point);
+            }
+            if (selection.width > 0 || selection.height > 0)
+                fireTileRegionSelectionEvent(selection);
+			origin = null;
+		}
+		
+		@Override
+		public void mouseDown(org.eclipse.swt.events.MouseEvent e) {
+			origin = getTileCoordinates(e.x, e.y);
+			setSelection(new Rectangle(origin.x, origin.y, 0, 0));
+			scrollTileToVisible(origin);
+			Tile clickedTile = getTileAt(origin.x, origin.y);
+			if (clickedTile != null) {
+				fireTileSelectionEvent(clickedTile);
+			}
+			
+		}
+		
+		@Override
+		public void mouseDoubleClick(org.eclipse.swt.events.MouseEvent arg0) {
+			// TODO Auto-generated method stub
+			
+		}
+		
+		@Override
+		public void mouseMove(MouseEvent e) {
+			if (origin != null) {
+				Point point = getTileCoordinates(e.x, e.y);
+                Rectangle select = new Rectangle(origin.x, origin.y, 0, 0);
+                select = add(select, point.x , point.y);
+                if (!select.equals(selection)) {
+                    setSelection(select);
+                    scrollTileToVisible(point);
+                }
+			}
+				
+		}
+	}
+	
     protected static final int SELECTION_ALPHA = 80;
 	private static final int TILES_PER_ROW = 4;
     private TileSet tileset;
@@ -60,50 +111,9 @@ public class TilePalettePanel extends Composite implements
         tileSelectionListeners = new LinkedList<TileSelectionListener>();
         selectionColor = new org.eclipse.swt.graphics.Color(Display.getDefault(),100, 100, 255);
 
-        MouseListener mouseInputAdapter = new MouseListener() {
-        	private Point origin;
-        	 
-			@Override
-			public void mouseUp(org.eclipse.swt.events.MouseEvent e) {
-				Point point = getTileCoordinates(e.x, e.y);
-                Rectangle select = new Rectangle(origin.x, origin.y, 0, 0);
-                select = add(select, point.x , point.y);
-                if (!select.equals(selection)) {
-                    setSelection(select);
-                    scrollTileToVisible(point);
-                }
-                if (selection.width > 0 || selection.height > 0)
-                    fireTileRegionSelectionEvent(selection);
-				
-			}
-			
-			@Override
-			public void mouseDown(org.eclipse.swt.events.MouseEvent e) {
-				 origin = getTileCoordinates(e.x, e.y);
-	                setSelection(new Rectangle(origin.x, origin.y, 0, 0));
-	                scrollTileToVisible(origin);
-	                Tile clickedTile = getTileAt(origin.x, origin.y);
-	                if (clickedTile != null) {
-	                    fireTileSelectionEvent(clickedTile);
-	                }
-				
-			}
-			
-			@Override
-			public void mouseDoubleClick(org.eclipse.swt.events.MouseEvent arg0) {
-				// TODO Auto-generated method stub
-				
-			}
-		};
+        TileMouseListener mouseInputAdapter = new TileMouseListener();
         addMouseListener(mouseInputAdapter);
-        addMouseMoveListener(new MouseMoveListener() {
-			
-			@Override
-			public void mouseMove(MouseEvent e) {
-				// TODO Auto-generated method stub
-				
-			}
-		});
+        addMouseMoveListener(mouseInputAdapter);
         addPaintListener(this);
     }
 
@@ -303,14 +313,14 @@ public class TilePalettePanel extends Composite implements
         if (tileset != null) {
             // Draw the tiles
             int twidth = tileset.getTileWidth() + 1;
-            int theight = tileset.getTileHeight() + 1;
+            int height = tileset.getTileHeight() + 1;
             int tilesPerRow = getTilesPerRow();
 
-            int startY = clip.y / theight;
-            int endY = (clip.y + clip.height) / theight + 1;
+            int startY = clip.y / height;
+            int endY = (clip.y + clip.height) / height + 1;
             int tileAt = tilesPerRow * startY;
             int gx;
-            int gy = startY * theight;
+            int gy = startY * height;
 
             for (int y = startY; y < endY; y++) {
                 gx = 1;
@@ -322,11 +332,11 @@ public class TilePalettePanel extends Composite implements
                     Tile tile = tilesetMap.get(tileAt);
 
                     if (tile != null) {
-                        tile.drawRaw(gc, gx, gy + theight, 1.0);
+                        drawRaw(gc, tile.getImage(), gx, gy + height);
                     }
                     gx += twidth;
                 }
-                gy += theight;
+                gy += height;
             }
 
             // Draw the selection
@@ -334,16 +344,37 @@ public class TilePalettePanel extends Composite implements
                 
 				gc.setForeground(selectionColor);
                 gc.drawRectangle(
-                        selection.x * twidth, selection.y * theight,
+                        selection.x * twidth, selection.y * height,
                         (selection.width + 1) * twidth,
-                        (selection.height + 1) * theight);
+                        (selection.height + 1) * height);
 //                ((Graphics2D) g).setComposite(AlphaComposite.getInstance(
 //                        AlphaComposite.SRC_ATOP, 0.2f));
                 gc.fillRectangle(
-                        selection.x * twidth + 1, selection.y * theight + 1,
+                        selection.x * twidth + 1, selection.y * height + 1,
                         (selection.width + 1) * twidth - 1,
-                        (selection.height + 1) * theight - 1);
+                        (selection.height + 1) * height - 1);
             }
+        }
+    }
+    
+    /**
+     * This drawing function handles drawing the tile image at the
+     * specified zoom level. It will attempt to use a cached copy,
+     * but will rescale if the requested zoom does not equal the
+     * current cache zoom.
+     *
+     * @param gc Graphics instance to draw to
+     * @param x x-coord to draw tile at
+     * @param y y-coord to draw tile at
+     * @param zoom Zoom level to draw the tile
+     */
+    public void drawRaw(GC gc, Image image, int x, int y) {
+        if (image != null) {
+        	Rectangle bounds = image.getBounds();
+            gc.drawImage(image, x, y - bounds.height);
+        } else {
+            // TODO: Allow drawing IDs when no image data exists as a
+            // config option
         }
     }
 
@@ -467,14 +498,14 @@ public class TilePalettePanel extends Composite implements
         if (tileset != null) {
             // Draw the tiles
             int twidth = tileset.getTileWidth() + 1;
-            int theight = tileset.getTileHeight() + 1;
+            int height = tileset.getTileHeight() + 1;
             int tilesPerRow = getTilesPerRow();
 
-            int startY = clip.y / theight;
-            int endY = (clip.y + clip.height) / theight + 1;
+            int startY = clip.y / height;
+            int endY = (clip.y + clip.height) / height + 1;
             int tileAt = tilesPerRow * startY;
             int gx;
-            int gy = startY * theight;
+            int gy = startY * height;
 
             for (int y = startY; y < endY; y++) {
                 gx = 1;
@@ -486,26 +517,26 @@ public class TilePalettePanel extends Composite implements
                     Tile tile = tilesetMap.get(tileAt);
 
                     if (tile != null) {
-                        tile.drawRaw(gc, gx, gy + theight, 1.0);
+                    	drawRaw(gc, tile.getImage(), gx, gy + height);
                     }
                     gx += twidth;
                 }
-                gy += theight;
+                gy += height;
             }
 
             // Draw the selection
             if (selection != null) {
                 gc.setForeground(selectionColor);
                 gc.drawRectangle(
-                        selection.x * twidth, selection.y * theight,
+                        selection.x * twidth, selection.y * height,
                         (selection.width + 1) * twidth,
-                        (selection.height + 1) * theight);
+                        (selection.height + 1) * height);
                 gc.setBackground(selectionColor);
                 gc.setAlpha(SELECTION_ALPHA);
                 gc.fillRectangle(
-                        selection.x * twidth + 1, selection.y * theight + 1,
+                        selection.x * twidth + 1, selection.y * height + 1,
                         (selection.width + 1) * twidth - 1,
-                        (selection.height + 1) * theight - 1);
+                        (selection.height + 1) * height - 1);
             }
         }
 		

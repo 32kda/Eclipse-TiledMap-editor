@@ -1,11 +1,16 @@
 package com.onpositive.mapper;
 
+import javax.print.attribute.standard.Severity;
+
+import org.eclipse.core.runtime.Status;
 import org.eclipse.jface.resource.ImageDescriptor;
+import org.eclipse.ui.WorkbenchException;
 import org.eclipse.ui.plugin.AbstractUIPlugin;
 import org.osgi.framework.BundleContext;
 
 /**
  * The activator class controls the plug-in life cycle
+ * @author Dmitry Karpenko
  */
 public class MapperPlugin extends AbstractUIPlugin {
 
@@ -57,5 +62,9 @@ public class MapperPlugin extends AbstractUIPlugin {
 	 */
 	public static ImageDescriptor getImageDescriptor(String path) {
 		return imageDescriptorFromPlugin(PLUGIN_ID, path);
+	}
+
+	public static void log(WorkbenchException e) {
+		getDefault().getLog().log(new Status(Severity.ERROR.getValue(),PLUGIN_ID,"Exception",e));
 	}
 }

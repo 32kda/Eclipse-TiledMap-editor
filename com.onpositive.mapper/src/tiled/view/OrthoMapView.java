@@ -33,6 +33,7 @@ import tiled.core.ObjectGroup;
 import tiled.core.Tile;
 import tiled.core.TileLayer;
 import tiled.mapeditor.selection.SelectionLayer;
+import tiled.util.AnchoringUtil;
 import tiled.util.Converter;
 
 /**
@@ -40,9 +41,10 @@ import tiled.util.Converter;
  */
 public class OrthoMapView extends MapView
 {
-	protected static final int SEL_HOVER_ALPHA = 50;
 	protected Polygon propPoly;
-    protected Color selColor;
+//    protected Color selColor;
+    
+    private static final int OBJECT_FOREGROUND = SWT.COLOR_GRAY;
 
     /**
      * Creates a new orthographic map view that displays the specified map.
@@ -57,10 +59,6 @@ public class OrthoMapView extends MapView
         propPoly.addPoint(0, 0);
         propPoly.addPoint(12, 0);
         propPoly.addPoint(12, 12);
-        
-        Point preferredSize = getPreferredSize();
-        setBounds(0,0,preferredSize.x,preferredSize.y);
-        selColor = new Color(parent.getDisplay(),DEFAULT_SEL_COLOR);
     }
 
     public int getScrollableBlockIncrement(Rectangle visibleRect,
@@ -104,7 +102,7 @@ public class OrthoMapView extends MapView
 
         // Determine area to draw from clipping rectangle
         Rectangle clipRect = gc.getClipping();
-        int startX = clipRect.x / tsize.x;
+        int startX = clipRect.x / tsize.x - 1; //-1 for large tiles
         int startY = clipRect.y / tsize.y;
         int endX = (clipRect.x + clipRect.width) / tsize.x + 1;
         int endY = (clipRect.y + clipRect.height) / tsize.y + 3;
@@ -116,29 +114,29 @@ public class OrthoMapView extends MapView
             for (int x = startX, gx = startX * tsize.x;
                     x < endX; x++, gx += tsize.x) {
                 Tile tile = layer.getTileAt(x, y);
-
                 if (tile != null) {
                     if (layer instanceof SelectionLayer) {
-                    	tile.draw(gc, gx, gy, zoom);
+                    	if (shouldPaintBrushTile())
+                    		RenderingUtil.drawTile(gc, tile, gx, gy, zoom);
                         Transform transform = new Transform(getDisplay());
                         transform.translate(gx,gy);
                 		gc.setTransform(transform);
                 		gc.setAlpha(SEL_HOVER_ALPHA);
                         gc.fillPolygon(Converter.getPolygonArray(gridPoly));
-                        gc.setAlpha(255);
+                        gc.setAlpha(OPAQUE);
                         gc.setTransform(null);
                         transform.dispose();
                         //paintEdge(g, layer, gx, gy);
                     }
                     else {
-                        tile.draw(gc, gx, gy, zoom);
+                    	RenderingUtil.drawTile(gc, tile, gx, gy, zoom);
                     }
                 }
             }
         }
     }
 
-    protected void paintObjectGroup(GC gc, ObjectGroup og) {
+	protected void paintObjectGroup(GC gc, ObjectGroup og) {
         final Point tsize = getTileSize();
         final Rectangle bounds = og.getBounds();
         Iterator<MapObject> itr = og.getObjects();
@@ -159,31 +157,37 @@ public class OrthoMapView extends MapView
                 gc.drawImage(objectImage, (int) ox, (int) oy);
             }
 
-            if (mo.getWidth() == 0 || mo.getHeight() == 0) {
+            int objWidth = mo.getWidth();
+			int objHeight = mo.getHeight();
+			if (objWidth == 0 || objHeight == 0) {
                 gc.setAntialias(SWT.ON);
                 gc.setBackground(getDisplay().getSystemColor(SWT.COLOR_BLACK));
                 gc.fillOval((int) ox + 1, (int) oy + 1,
                         (int) (10 * zoom), (int) (10 * zoom));
-                gc.setBackground(getDisplay().getSystemColor(SWT.COLOR_MAGENTA));
+                gc.setBackground(getDisplay().getSystemColor(OBJECT_FOREGROUND));
                 gc.fillOval((int) ox, (int) oy,
                         (int) (10 * zoom), (int) (10 * zoom));
                 gc.setAntialias(SWT.OFF);
             } else {
                 gc.setForeground(getDisplay().getSystemColor(SWT.COLOR_BLACK));
                 gc.drawRectangle((int) ox + 1, (int) oy + 1,
-                    (int) (mo.getWidth() * zoom),
-                    (int) (mo.getHeight() * zoom));
-                gc.setForeground(getDisplay().getSystemColor(SWT.COLOR_MAGENTA));
+                    (int) (objWidth * zoom),
+                    (int) (objHeight * zoom));
+                gc.setForeground(getDisplay().getSystemColor(OBJECT_FOREGROUND));
                 gc.drawRectangle((int) ox, (int) oy,
-                    (int) (mo.getWidth() * zoom),
-                    (int) (mo.getHeight() * zoom));
+                    (int) (objWidth * zoom),
+                    (int) (objHeight * zoom));
             }
             if (zoom > 0.0625) {
+            	if (drawResizeAnchors) {
+            		drawAnchors(gc, ox, oy, objWidth, objHeight);
+            	}
                 final String s = mo.getName() != null ? mo.getName() : "(null)";
                 gc.setForeground(getDisplay().getSystemColor(SWT.COLOR_BLACK));
                 gc.drawString(s, (int) (ox - 5) + 1, (int) (oy - 5) + 1);
-                gc.setForeground(getDisplay().getSystemColor(SWT.COLOR_MAGENTA));
+                gc.setForeground(getDisplay().getSystemColor(OBJECT_FOREGROUND));
                 gc.drawString(s, (int) (ox - 5), (int) (oy - 5));
+                
             }
         }
 
@@ -194,6 +198,24 @@ public class OrthoMapView extends MapView
         transform.dispose();
     }
 
+	protected void drawAnchors(GC gc, double ox, double oy, int objWidth,
+			int objHeight) {
+
+		Color oldBackground = gc.getBackground();
+		Rectangle[] anchorRects = AnchoringUtil.getAnchorRects((int) ox,(int) oy,objWidth,objHeight);
+		for (int i = 0; i < anchorRects.length; i++) {
+			Rectangle rectangle = anchorRects[i];
+			gc.setBackground(getDisplay().getSystemColor(SWT.COLOR_BLACK));
+			gc.fillRectangle(rectangle.x + 1, rectangle.y + 1, rectangle.width, rectangle.height);
+			if (i == AnchoringUtil.ANCHOR_LEFT || i == AnchoringUtil.ANCHOR_TOP || i == AnchoringUtil.ANCHOR_RIGHT || i == AnchoringUtil.ANCHOR_BOTTOM)
+				gc.setBackground(getDisplay().getSystemColor(SWT.COLOR_YELLOW));
+			else
+				gc.setBackground(getDisplay().getSystemColor(SWT.COLOR_RED));
+			gc.fillRectangle(rectangle);
+		}
+		gc.setBackground(oldBackground);
+	}
+	
     protected void paintGrid(GC gc) {
         // Determine tile size
         Point tsize = getTileSize();
@@ -208,12 +230,14 @@ public class OrthoMapView extends MapView
         int endX = clipRect.x + clipRect.width;
         int endY = clipRect.y + clipRect.height;
 
+        gc.setLineStyle(SWT.LINE_DASH);
         for (int x = startX; x < endX; x += tsize.x) {
             gc.drawLine(x, clipRect.y, x, clipRect.y + clipRect.height - 1);
         }
         for (int y = startY; y < endY; y += tsize.y) {
             gc.drawLine(clipRect.x, y, clipRect.x + clipRect.width - 1, y);
         }
+        gc.setLineStyle(SWT.LINE_SOLID);
     }
 
     protected void paintCoordinates(GC gc) {
@@ -324,6 +348,29 @@ public class OrthoMapView extends MapView
 
         redraw(startX, startY, endX - startX, endY - startY,true);
     }
+    
+    public void repaintRegion(Rectangle region, Point brushSize) {
+    	Point tsize = getTileSize();
+        if (tsize.x <= 0 || tsize.y <= 0) {
+            return;
+        }
+        int maxExtraHeight =
+                (int) (map.getTileHeightMax() * zoom - tsize.y);
+
+        // Calculate the visible corners of the region
+        int startX = region.x * tsize.x;
+        int startY = region.y * tsize.y - maxExtraHeight;
+        int endX = (region.x + region.width) * tsize.x;
+        int endY = (region.y + region.height) * tsize.y;
+        
+        if (brushSize.x > tsize.x || brushSize.y > tsize.y) {
+	    	startX -= brushSize.x;
+	    	endX += brushSize.x;
+	    	startY -= brushSize.y;
+	    	endY += brushSize.y;
+        }
+        redraw(startX, startY, endX - startX, endY - startY,true);
+    }
 
     public Point screenToTileCoords(int x, int y) {
         Point tsize = getTileSize();
@@ -357,4 +404,24 @@ public class OrthoMapView extends MapView
         Point tsize = getTileSize();
         return new Point(x * tsize.x, y * tsize.y);
     }
+    
+    @Override
+	public Point getSnappedVector(Point vector) {
+		Point result = new Point(0,0);
+		Point tsize = getTileSize();
+		result.x = tsize.x * (vector.x / tsize.x);
+		result.y = tsize.y * (vector.y / tsize.y);
+		return result;
+	}
+	
+	public int getSnappedScalarX(int scalar) {
+		Point tsize = getTileSize();
+		return tsize.x * (scalar / tsize.x);
+	}
+	
+	public int getSnappedScalarY(int scalar) {
+		Point tsize = getTileSize();
+		return tsize.y * (scalar / tsize.y);
+	}
+	
 }

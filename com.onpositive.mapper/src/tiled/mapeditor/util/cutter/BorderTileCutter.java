@@ -16,6 +16,7 @@ import java.awt.Dimension;
 
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.graphics.Point;
+import org.eclipse.swt.graphics.RGB;
 
 /**
  * @version $Id$
@@ -43,4 +44,10 @@ public class BorderTileCutter implements TileCutter
         // TODO Auto-generated method stub
         return null;
     }
+
+	@Override
+	public void setTransparentColor(RGB transparentColor) {
+		// TODO Auto-generated method stub
+		
+	}
 }

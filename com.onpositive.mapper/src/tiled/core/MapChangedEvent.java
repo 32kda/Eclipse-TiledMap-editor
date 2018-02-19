@@ -19,8 +19,19 @@ import java.util.EventObject;
  */
 public class MapChangedEvent extends EventObject
 {
+	public static final int DEFAULT = 0;
+	public static final int LAYER_CHANGE = 1;
+	
+	public final int type;
+	
     public MapChangedEvent(Map map) {
         super(map);
+        type = DEFAULT;
+    }
+    
+    public MapChangedEvent(Map map, int type) {
+        super(map);
+        this.type = type;
     }
 
     public Map getMap() {

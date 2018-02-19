@@ -26,6 +26,7 @@ import tiled.core.TileSet;
 import tiled.core.TileLayer;
 import tiled.core.Tile;
 import tiled.core.MapLayer;
+import tiled.view.RenderingUtil;
 
 /**
  * This class facilitates physically merging tiles.
@@ -121,7 +122,7 @@ public class TileMergeHelper
 
         public void render(GC gc) {
             for (Tile tile : sandwich) {
-                if (tile != null) tile.draw(gc, 0, getHeight(), 1.0f);
+                if (tile != null) RenderingUtil.drawTile(gc, tile, 0, getHeight());
             }
         }
 

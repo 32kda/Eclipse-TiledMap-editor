@@ -137,6 +137,17 @@ public class MultilayerPlane implements Iterable<MapLayer>
     public MapLayer removeLayer(int index) {
         return layers.remove(index);
     }
+    
+    /**
+     * Removes specified layer. Layers above this layer will
+     * move down to fill the gap.
+     *
+     * @param layer {@link MapLayer} to be removed
+     * @return <code>true</code> if layer was removed from the list, <code>false</code> otherwise
+     */
+    public boolean removeLayer(MapLayer layer) {
+        return layers.remove(layer);
+    }
 
     /**
      * Removes all layers from the plane.
@@ -259,7 +270,7 @@ public class MultilayerPlane implements Iterable<MapLayer>
      * @param dy     The shift in y direction in tiles.
      */
     public void resize(int width, int height, int dx, int dy) {
-        ListIterator itr = getLayers();
+        ListIterator<?> itr = getLayers();
         while (itr.hasNext()) {
             MapLayer layer = (MapLayer)itr.next();
             if (layer.bounds.equals(bounds)) {
